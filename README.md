@@ -29,6 +29,17 @@ git submodule update --init --depth 1
 .\scripts\Verify-AndroidApk.ps1
 ```
 
+To install the debug build on a connected Android phone, enable Developer
+options and USB debugging, unlock the phone, approve its USB debugging prompt,
+and run:
+
+```powershell
+.\scripts\Install-Android.ps1
+```
+
+The installer detects the phone's CPU architecture, verifies the matching APK,
+and updates an existing Theocraft installation without removing its local data.
+
 For a fast desktop integration test, extract the official Luanti 5.16.1 Windows
 archive under `.tools\luanti-5.16.1-win64` (or pass its executable explicitly),
 then run:
