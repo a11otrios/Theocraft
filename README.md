@@ -26,6 +26,7 @@ git submodule update --init --depth 1
 .\scripts\Assemble-Game.ps1
 .\scripts\Prepare-Android.ps1
 .\scripts\Build-Android.ps1 -Configuration Debug
+.\scripts\Verify-AndroidApk.ps1
 ```
 
 For a fast desktop integration test, extract the official Luanti 5.16.1 Windows

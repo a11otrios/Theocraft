@@ -22,6 +22,8 @@ def test_android_game_assembly_bundles_import_support() -> None:
 def test_branded_engine_patch_allows_villager_http() -> None:
     patch = (ROOT / "patches" / "luanti-5.16.1-theocraft.patch").read_text(encoding="utf-8")
     assert 'setDefault("secure.http_mods", "theocraft_villagers")' in patch
+    assert "ICONV_INCLUDE_DIR" in patch
+    assert "resourceConfigurations += ['en']" in patch
 
 
 def test_import_placeholder_uses_a_bundled_texture() -> None:

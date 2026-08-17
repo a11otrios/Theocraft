@@ -4,10 +4,15 @@ diff --git a/android/app/build.gradle b/android/app/build.gradle
 @@ -6 +6 @@ android {
 -		applicationId 'net.minetest.minetest'
 +		applicationId 'dev.theocraft.android'
+@@ -12,0 +13 @@ android {
++		resourceConfigurations += ['en']
 @@ -89,0 +90,3 @@ task prepareAssets() {
 +		copy {
 +			from "${projRoot}/games" into "${assetsFolder}/games"
 +		}
+@@ -108 +111 @@ task prepareAssets() {
+-		fileTree("${projRoot}/po").include("**/*.po").grep {
++		fileTree("${projRoot}/po").include(project.hasProperty('theocraftEnglishOnly') ? "**/*.disabled" : "**/*.po").grep {
 diff --git a/android/app/src/main/AndroidManifest.xml b/android/app/src/main/AndroidManifest.xml
 --- a/android/app/src/main/AndroidManifest.xml
 +++ b/android/app/src/main/AndroidManifest.xml
@@ -28,6 +33,19 @@ diff --git a/android/app/src/main/res/values/strings.xml b/android/app/src/main/
 @@ -9 +9 @@
 -	<string name="game_notification_title">Luanti is running</string>
 +	<string name="game_notification_title">Theocraft is running</string>
+diff --git a/cmake/Modules/AndroidLibs.cmake b/cmake/Modules/AndroidLibs.cmake
+--- a/cmake/Modules/AndroidLibs.cmake
++++ b/cmake/Modules/AndroidLibs.cmake
+@@ -10,0 +11 @@
++set(ICONV_INCLUDE_DIR ${DEPS}/Iconv/include)
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -580,0 +581,4 @@ include_directories(SYSTEM
++if(ANDROID)
++	include_directories(${ICONV_INCLUDE_DIR})
++endif()
++
 diff --git a/src/defaultsettings.cpp b/src/defaultsettings.cpp
 --- a/src/defaultsettings.cpp
 +++ b/src/defaultsettings.cpp
