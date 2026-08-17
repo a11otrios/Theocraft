@@ -1,0 +1,10 @@
+[submodule "vendor/luanti"]
+	path = vendor/luanti
+	url = https://github.com/luanti-org/luanti.git
+	branch = 5.16.1
+	shallow = true
+[submodule "vendor/voxelibre"]
+	path = vendor/voxelibre
+	url = https://github.com/VoxeLibre/VoxeLibre.git
+	branch = 0.92.1
+	shallow = true

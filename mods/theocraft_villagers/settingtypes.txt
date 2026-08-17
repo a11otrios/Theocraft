@@ -1,0 +1,25 @@
+[Theocraft Villagers]
+
+# Enables requests to the configured remote LLM gateway. When disabled or unavailable,
+# villagers still understand a small deterministic set of offline instructions.
+theocraft_llm_enabled (Use remote LLM gateway) bool false
+
+# HTTPS endpoint implementing docs/llm-gateway.md. Use a gateway access token here,
+# never a raw model-provider key in a distributed Android build.
+theocraft_llm_endpoint (LLM gateway URL) string
+
+# Model identifier forwarded to the gateway. The gateway decides how it maps to a provider.
+theocraft_llm_model (LLM model) string
+
+# Optional short-lived access token issued by your gateway.
+theocraft_llm_access_token (LLM gateway access token) string
+
+# Additional behaviour guidance sent with every request. World actions remain restricted
+# by Theocraft's server-side allowlist regardless of this text.
+theocraft_llm_system_prompt (Extra villager instructions) string Be concise, friendly, and stay in character.
+
+# Only enable this for development with a gateway on a trusted local network.
+theocraft_llm_allow_insecure_http (Allow non-HTTPS gateway) bool false
+
+# Maximum time to wait for a gateway response before using the offline interpreter.
+theocraft_llm_timeout_seconds (LLM request timeout) int 15 3 60

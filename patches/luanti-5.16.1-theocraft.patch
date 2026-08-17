@@ -1,0 +1,36 @@
+diff --git a/android/app/build.gradle b/android/app/build.gradle
+--- a/android/app/build.gradle
++++ b/android/app/build.gradle
+@@ -6 +6 @@ android {
+-		applicationId 'net.minetest.minetest'
++		applicationId 'dev.theocraft.android'
+@@ -89,0 +90,3 @@ task prepareAssets() {
++		copy {
++			from "${projRoot}/games" into "${assetsFolder}/games"
++		}
+diff --git a/android/app/src/main/AndroidManifest.xml b/android/app/src/main/AndroidManifest.xml
+--- a/android/app/src/main/AndroidManifest.xml
++++ b/android/app/src/main/AndroidManifest.xml
+@@ -55 +55 @@
+-			android:authorities="net.minetest.minetest.fileprovider"
++			android:authorities="dev.theocraft.android.fileprovider"
+diff --git a/android/app/src/main/res/values/strings.xml b/android/app/src/main/res/values/strings.xml
+--- a/android/app/src/main/res/values/strings.xml
++++ b/android/app/src/main/res/values/strings.xml
+@@ -3 +3 @@
+-	<string name="label">Luanti</string>
++	<string name="label">Theocraft</string>
+@@ -6,2 +6,2 @@
+-	<string name="notification_channel_description">Notifications from Luanti</string>
+-	<string name="unzip_notification_title">Loading Luanti</string>
++	<string name="notification_channel_description">Notifications from Theocraft</string>
++	<string name="unzip_notification_title">Loading Theocraft</string>
+@@ -9 +9 @@
+-	<string name="game_notification_title">Luanti is running</string>
++	<string name="game_notification_title">Theocraft is running</string>
+diff --git a/src/defaultsettings.cpp b/src/defaultsettings.cpp
+--- a/src/defaultsettings.cpp
++++ b/src/defaultsettings.cpp
+@@ -515 +515 @@ void set_default_settings()
+-	settings->setDefault("secure.http_mods", "");
++	settings->setDefault("secure.http_mods", "theocraft_villagers");
