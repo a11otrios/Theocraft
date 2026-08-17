@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $voxelibreSource = Join-Path $repositoryRoot "vendor\voxelibre"
-$modSource = Join-Path $repositoryRoot "mods\theocraft_villagers"
+$theocraftMods = @("theocraft_villagers", "theocraft_import")
 $outputPath = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot $OutputDirectory))
 $buildRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot ".build"))
 
@@ -26,8 +26,11 @@ $robocopyExitCode = $LASTEXITCODE
 if ($robocopyExitCode -ge 8) {
 	throw "Failed to stage VoxeLibre (robocopy exit $robocopyExitCode)."
 }
-$destinationMod = Join-Path $outputPath "mods\theocraft_villagers"
-Copy-Item -LiteralPath $modSource -Destination $destinationMod -Recurse -Force
+foreach ($modName in $theocraftMods) {
+	$modSource = Join-Path $repositoryRoot "mods\$modName"
+	$destinationMod = Join-Path $outputPath "mods\$modName"
+	Copy-Item -LiteralPath $modSource -Destination $destinationMod -Recurse -Force
+}
 
 $gameConf = @"
 title = Theocraft

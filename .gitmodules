@@ -8,3 +8,8 @@
 	url = https://github.com/VoxeLibre/VoxeLibre.git
 	branch = 0.92.1
 	shallow = true
+[submodule "vendor/mcimport"]
+	path = vendor/mcimport
+	url = https://github.com/minetest-tools/mcimport.git
+	branch = master
+	shallow = true

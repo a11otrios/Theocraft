@@ -12,8 +12,12 @@ Production is based on the native [Luanti](https://github.com/luanti-org/luanti)
 - Configurable HTTPS LLM-gateway contract with a deterministic offline fallback.
 - Server-validated `follow`, `stay`, `come`, `gather`, and `build` actions.
 - Generated Android staging that bundles and brands the game without changing upstream checkouts.
+- Desktop conversion of legacy and modern Minecraft Java Anvil worlds, including
+  Minecraft 1.18+ negative build heights and explicit unknown-block reporting.
 
-Minecraft Java world import is the next implementation milestone; see `docs/architecture.md` for its boundary.
+The importer currently converts Overworld terrain and spawn data. See
+`tools/world_import/README.md` for usage and the deliberately narrower treatment
+of dimensions, entities, block entities, and player data.
 
 ## Bootstrap and build on Windows
 
@@ -22,6 +26,16 @@ git submodule update --init --depth 1
 .\scripts\Assemble-Game.ps1
 .\scripts\Prepare-Android.ps1
 .\scripts\Build-Android.ps1 -Configuration Debug
+```
+
+Convert an existing Minecraft Java Edition world on the desktop and optionally
+package it for transfer to Android:
+
+```powershell
+.\scripts\Import-MinecraftWorld.ps1 `
+  -Source "C:\Minecraft\saves\My World" `
+  -Destination "C:\Converted\My World" `
+  -Zip
 ```
 
 Android SDK/NDK requirements are inherited from the pinned Luanti release. The first Gradle build downloads Luanti's Android native dependencies.
