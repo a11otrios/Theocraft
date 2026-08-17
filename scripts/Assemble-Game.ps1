@@ -39,6 +39,5 @@ disallowed_mapgens = v6
 version = 0.1.0
 "@
 Set-Content -LiteralPath (Join-Path $outputPath "game.conf") -Value $gameConf -Encoding UTF8
-Add-Content -LiteralPath (Join-Path $outputPath "minetest.conf") -Value "`n# Theocraft bundled mod permission`nsecure.http_mods = theocraft_villagers`n"
 
 Write-Output "Assembled Theocraft game at $outputPath"

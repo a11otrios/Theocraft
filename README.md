@@ -28,6 +28,19 @@ git submodule update --init --depth 1
 .\scripts\Build-Android.ps1 -Configuration Debug
 ```
 
+For a fast desktop integration test, extract the official Luanti 5.16.1 Windows
+archive under `.tools\luanti-5.16.1-win64` (or pass its executable explicitly),
+then run:
+
+```powershell
+.\scripts\Run-Desktop.ps1
+```
+
+The script uses an isolated profile under `.tools\desktop-test`; it does not
+touch an existing Luanti installation or its worlds. In the test world, use
+`/spawnentity mobs_mc:villager` and right-click the villager to open Theocraft's
+conversation UI.
+
 Convert an existing Minecraft Java Edition world on the desktop and optionally
 package it for transfer to Android:
 
