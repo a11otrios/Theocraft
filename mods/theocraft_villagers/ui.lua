@@ -47,26 +47,28 @@ function mod.show_conversation(player_name, status)
 	mod.ensure_identity(self)
 	local status_text = status or ""
 	local limits_button = can_edit_limits(player_name)
-		and "button[5.1,5.35;2.3,0.7;limits;Limits]" or ""
+		and "button[4.15,4.55;1.9,0.6;limits;Limits]" or ""
 	local formspec = table.concat({
 		"formspec_version[4]",
-		"size[10,6.2]",
+		"size[8.8,5.5]",
 		-- Pin the box's bottom-centre to the screen's bottom-centre so it sits
 		-- out of the way at the bottom instead of filling the middle.
 		"position[0.5,1.0]",
 		"anchor[0.5,1.0]",
-		"label[0.3,0.4;", minetest.formspec_escape(self._theocraft_name), "]",
-		"textarea[0.3,0.7;9.4,3.4;history;;", minetest.formspec_escape(history_text(self, player_name)), "]",
-		"field[0.3,4.35;6.7,0.85;message;;]",
+		-- Flat, borderless text areas so the box reads thin, not chunky.
+		"style_type[textarea,field;border=false]",
+		"label[0.25,0.3;", minetest.formspec_escape(self._theocraft_name), "]",
+		"textarea[0.25,0.55;8.3,2.9;history;;", minetest.formspec_escape(history_text(self, player_name)), "]",
+		"field[0.25,3.65;5.45,0.7;message;;]",
 		"field_close_on_enter[message;false]",
 		"field_enter_after_edit[message;true]",
 		"set_focus[message;true]",
-		"button[7.1,4.3;2.6,0.95;send;Send]",
-		"button[0.3,5.35;2.3,0.7;trade;Trade]",
-		"button[2.7,5.35;2.3,0.7;take;Take]",
+		"button[5.85,3.6;2.7,0.8;send;Send]",
+		"button[0.25,4.55;1.9,0.6;trade;Trade]",
+		"button[2.2,4.55;1.9,0.6;take;Take]",
 		limits_button,
-		"button_exit[7.6,5.35;2.3,0.7;close;Close]",
-		status_text ~= "" and ("label[0.3,6.0;" .. minetest.formspec_escape(status_text) .. "]") or "",
+		"button_exit[6.45,4.55;1.9,0.6;close;Close]",
+		status_text ~= "" and ("label[0.25,5.2;" .. minetest.formspec_escape(status_text) .. "]") or "",
 	})
 	minetest.show_formspec(player_name, FORMNAME, formspec)
 end
