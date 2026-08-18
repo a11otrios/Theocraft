@@ -27,9 +27,9 @@ end
 local function history_text(self, player_name)
 	local lines = {}
 	local history = mod.get_history(self, player_name)
-	-- Natural chat order: oldest first, newest at the bottom. Show only the
-	-- last few turns so the latest reply stays near the visible bottom.
-	local first = math.max(1, #history - 5)
+	-- Natural chat order: oldest first, newest at the bottom. The box scrolls,
+	-- and show_conversation starts it at the bottom, so show a good chunk.
+	local first = math.max(1, #history - 11)
 	for index = first, #history do
 		local entry = history[index]
 		local speaker = entry.role == "player" and player_name or self._theocraft_name
@@ -48,6 +48,22 @@ function mod.show_conversation(player_name, status)
 	local status_text = status or ""
 	local limits_button = can_edit_limits(player_name)
 		and "button[4.15,4.55;1.9,0.6;limits;Limits]" or ""
+
+	-- The history lives in a scroll container so it can start scrolled to the
+	-- bottom (a plain textarea always opens at the top). Estimate the wrapped
+	-- content height, then set the scrollbar to the bottom so the latest reply
+	-- is what you see. Over-estimate slightly (few chars/line) so we never stop
+	-- short of the newest message.
+	local hist = history_text(self, player_name)
+	local hist_h = 2.9
+	local n_lines = 0
+	for line in (hist .. "\n"):gmatch("(.-)\n") do
+		n_lines = n_lines + math.max(1, math.ceil(#line / 38))
+	end
+	local content_h = math.max(hist_h, n_lines * 0.5 + 0.2)
+	local overflow = content_h - hist_h
+	local scroll_factor = overflow > 0 and (overflow / 1000) or 0
+
 	local formspec = table.concat({
 		"formspec_version[4]",
 		"size[8.8,5.5]",
@@ -59,9 +75,15 @@ function mod.show_conversation(player_name, status)
 		-- field keeps its border so it's clearly tappable.
 		"style_type[textarea;border=false]",
 		"label[0.25,0.3;", minetest.formspec_escape(self._theocraft_name), "]",
+		"scrollbaroptions[max=1000;thumbsize=120]",
+		"scroll_container[0.25,0.55;8.05,", tostring(hist_h), ";histbar;vertical;",
+			tostring(scroll_factor), "]",
 		-- Empty name = READ-ONLY display. With a name it becomes an editable
 		-- field that hijacks the keyboard when tapped.
-		"textarea[0.25,0.55;8.3,2.9;;;", minetest.formspec_escape(history_text(self, player_name)), "]",
+		"textarea[0,0;8.05,", tostring(content_h), ";;;", minetest.formspec_escape(hist), "]",
+		"scroll_container_end[]",
+		-- value 1000 (= max) starts the view scrolled to the bottom.
+		"scrollbar[8.35,0.55;0.25,", tostring(hist_h), ";vertical;histbar;1000]",
 		"field[0.25,3.65;5.45,0.7;message;;]",
 		"field_close_on_enter[message;false]",
 		"field_enter_after_edit[message;true]",
