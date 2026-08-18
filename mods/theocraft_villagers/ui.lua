@@ -27,15 +27,15 @@ end
 local function history_text(self, player_name)
 	local lines = {}
 	local history = mod.get_history(self, player_name)
-	local first = math.max(1, #history - 7)
-	-- Newest first, so the latest reply is always visible at the top without
-	-- having to scroll (a plain textarea can't auto-scroll to the bottom).
-	for index = #history, first, -1 do
+	-- Natural chat order: oldest first, newest at the bottom. Show only the
+	-- last few turns so the latest reply stays near the visible bottom.
+	local first = math.max(1, #history - 5)
+	for index = first, #history do
 		local entry = history[index]
 		local speaker = entry.role == "player" and player_name or self._theocraft_name
 		lines[#lines + 1] = speaker .. ": " .. entry.content
 	end
-	return table.concat(lines, "\n\n")
+	return table.concat(lines, "\n")
 end
 
 function mod.show_conversation(player_name, status)
