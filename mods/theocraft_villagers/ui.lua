@@ -55,10 +55,13 @@ function mod.show_conversation(player_name, status)
 		-- out of the way at the bottom instead of filling the middle.
 		"position[0.5,1.0]",
 		"anchor[0.5,1.0]",
-		-- Flat, borderless text areas so the box reads thin, not chunky.
-		"style_type[textarea,field;border=false]",
+		-- Flat, borderless history so the box reads thin, not chunky. The input
+		-- field keeps its border so it's clearly tappable.
+		"style_type[textarea;border=false]",
 		"label[0.25,0.3;", minetest.formspec_escape(self._theocraft_name), "]",
-		"textarea[0.25,0.55;8.3,2.9;history;;", minetest.formspec_escape(history_text(self, player_name)), "]",
+		-- Empty name = READ-ONLY display. With a name it becomes an editable
+		-- field that hijacks the keyboard when tapped.
+		"textarea[0.25,0.55;8.3,2.9;;;", minetest.formspec_escape(history_text(self, player_name)), "]",
 		"field[0.25,3.65;5.45,0.7;message;;]",
 		"field_close_on_enter[message;false]",
 		"field_enter_after_edit[message;true]",
