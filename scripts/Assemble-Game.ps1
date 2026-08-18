@@ -26,6 +26,20 @@ $robocopyExitCode = $LASTEXITCODE
 if ($robocopyExitCode -ge 8) {
 	throw "Failed to stage VoxeLibre (robocopy exit $robocopyExitCode)."
 }
+
+# Upstream vl_hudbars calls mcl_gamemode.register_on_gamemode_change but only
+# declares "depends = mcl_util". On some mod load orders (observed on Android)
+# mcl_gamemode loads after vl_hudbars, so the global is nil and the game fails
+# to start with "attempt to index global 'mcl_gamemode'". Force the dependency.
+$hudbarsConf = Join-Path $outputPath "mods\HUD\vl_hudbars\mod.conf"
+if (Test-Path -LiteralPath $hudbarsConf) {
+	$hudbarsText = Get-Content -LiteralPath $hudbarsConf -Raw
+	if ($hudbarsText -notmatch "mcl_gamemode") {
+		$hudbarsText = $hudbarsText -replace "(?m)^(depends\s*=.*)$", '$1, mcl_gamemode'
+		Set-Content -LiteralPath $hudbarsConf -Value $hudbarsText -Encoding UTF8
+	}
+}
+
 foreach ($modName in $theocraftMods) {
 	$modSource = Join-Path $repositoryRoot "mods\$modName"
 	$destinationMod = Join-Path $outputPath "mods\$modName"
