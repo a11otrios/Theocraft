@@ -33,6 +33,13 @@ if (-not (Test-Path -LiteralPath $configuration)) {
 secure.http_mods = theocraft_villagers
 enable_remote_media_server = false
 server_announce = false
+
+# Talk to the local Ollama bridge (start it with scripts\Run-LlmGateway.ps1).
+theocraft_llm_enabled = true
+theocraft_llm_endpoint = http://127.0.0.1:8713/
+theocraft_llm_model = qwen2.5:3b
+theocraft_llm_allow_insecure_http = true
+theocraft_llm_timeout_seconds = 30
 "@ | Set-Content -LiteralPath $configuration -Encoding UTF8
 }
 
