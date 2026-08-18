@@ -50,8 +50,8 @@ then run:
 
 The script uses an isolated profile under `.tools\desktop-test`; it does not
 touch an existing Luanti installation or its worlds. In the test world, use
-`/spawnentity mobs_mc:villager` and right-click the villager to open Theocraft's
-conversation UI.
+`/summon mobs_mc:villager` (VoxeLibre renames the engine's `/spawnentity` to
+`/summon`) and right-click the villager to open Theocraft's conversation UI.
 
 Convert an existing Minecraft Java Edition world on the desktop and optionally
 package it for transfer to Android:
