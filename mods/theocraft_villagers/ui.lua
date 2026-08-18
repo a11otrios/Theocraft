@@ -1,5 +1,19 @@
 local mod = theocraft_villagers
 local FORMNAME = "theocraft_villagers:conversation"
+local LIMITS_FORMNAME = "theocraft_villagers:limits"
+
+-- Order and labels for the per-villager Limits editor. Keys match mod.limits.
+local LIMIT_FIELDS = {
+	{key = "history_entries",     label = "Conversation memory (turns)"},
+	{key = "message_length",      label = "Max player message length"},
+	{key = "speech_length",       label = "Max villager reply length"},
+	{key = "gather_count",        label = "Max gather count"},
+	{key = "interaction_distance", label = "Interaction distance (blocks)"},
+}
+
+local function can_edit_limits(player_name)
+	return minetest.check_player_privs(player_name, {server = true})
+end
 
 local function session_entity(player_name)
 	local session = mod.sessions[player_name]
@@ -44,16 +58,56 @@ function mod.show_conversation(player_name, status)
 		"button[8.8,6.35;2.65,0.85;send;Send]",
 		"button[0.55,7.45;2.4,0.8;trade;Trade]",
 		"button[3.15,7.45;2.4,0.8;take;Take items]",
+		can_edit_limits(player_name) and "button[5.75,7.45;2.4,0.8;limits;Limits]" or "",
 		"button_exit[9.05,7.45;2.4,0.8;close;Close]",
 		"label[0.55,8.45;", minetest.formspec_escape(status_text), "]",
 	})
 	minetest.show_formspec(player_name, FORMNAME, formspec)
 end
 
+function mod.show_limits(player_name, status)
+	local self = session_entity(player_name)
+	if not self then
+		mod.sessions[player_name] = nil
+		return
+	end
+	if not can_edit_limits(player_name) then
+		return mod.show_conversation(player_name, "You need the server privilege to edit limits.")
+	end
+	local over = type(self._theocraft_limits) == "table" and self._theocraft_limits or {}
+	local rows = {
+		"formspec_version[4]",
+		"size[11,9]",
+		"label[0.55,0.5;", minetest.formspec_escape("Limits for " .. self._theocraft_name), "]",
+		"label[0.55,1.05;", minetest.formspec_escape("Leave a field blank to inherit the global default."), "]",
+	}
+	local y = 1.7
+	for _, item in ipairs(LIMIT_FIELDS) do
+		local range = mod.limit_ranges[item.key]
+		local hint = string.format("%s  (default %d, range %d-%d)",
+			item.label, mod.limits[item.key], range[1], range[2])
+		local value = over[item.key]
+		rows[#rows + 1] = table.concat({
+			"field[0.55,", y, ";9.9,0.8;", item.key, ";",
+			minetest.formspec_escape(hint), ";",
+			minetest.formspec_escape(value and tostring(value) or ""), "]",
+		})
+		y = y + 1.15
+	end
+	rows[#rows + 1] = table.concat({"button[0.55,", y, ";2.6,0.85;save;Save]"})
+	rows[#rows + 1] = table.concat({"button[3.3,", y, ";2.6,0.85;back;Back]"})
+	rows[#rows + 1] = table.concat({"button_exit[8.4,", y, ";2.05,0.85;close;Close]"})
+	if status then
+		rows[#rows + 1] = table.concat({"label[0.55,", y + 1.0, ";",
+			minetest.formspec_escape(status), "]"})
+	end
+	minetest.show_formspec(player_name, LIMITS_FORMNAME, table.concat(rows))
+end
+
 function mod.start_conversation(self, player)
 	local player_name = player:get_player_name()
 	local villager_pos = self.object:get_pos()
-	if not villager_pos or vector.distance(villager_pos, player:get_pos()) > mod.limits.interaction_distance then return end
+	if not villager_pos or vector.distance(villager_pos, player:get_pos()) > mod.resolve_limits(self).interaction_distance then return end
 	mod.ensure_identity(self)
 	mod.sessions[player_name] = {object = self.object, id = self._id, original_rightclick = mod.original_rightclick}
 	mod.show_conversation(player_name)
@@ -61,7 +115,7 @@ end
 
 local function send_message(player, self, fields)
 	local player_name = player:get_player_name()
-	local message = mod.clean_text(fields.message, mod.limits.message_length)
+	local message = mod.clean_text(fields.message, mod.resolve_limits(self).message_length)
 	if message == "" then return mod.show_conversation(player_name, "Type a message first.") end
 	if mod.pending[player_name] then return mod.show_conversation(player_name, "Still waiting for a reply...") end
 	mod.pending[player_name] = true
@@ -84,7 +138,7 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 	local player_name = player:get_player_name()
 	local self = session_entity(player_name)
 	if not self then return true end
-	if vector.distance(player:get_pos(), self.object:get_pos()) > mod.limits.interaction_distance then
+	if vector.distance(player:get_pos(), self.object:get_pos()) > mod.resolve_limits(self).interaction_distance then
 		mod.sessions[player_name] = nil
 		minetest.close_formspec(player_name, FORMNAME)
 		return true
@@ -96,9 +150,49 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 	elseif fields.take then
 		mod.take_inventory(self, player)
 		mod.show_conversation(player_name, "Collected available items.")
+	elseif fields.limits then
+		if can_edit_limits(player_name) then
+			mod.show_limits(player_name)
+		else
+			mod.show_conversation(player_name, "You need the server privilege to edit limits.")
+		end
 	elseif fields.trade then
 		mod.sessions[player_name] = nil
 		if mod.original_rightclick then mod.original_rightclick(self, player) end
+	end
+	return true
+end)
+
+minetest.register_on_player_receive_fields(function(player, formname, fields)
+	if formname ~= LIMITS_FORMNAME then return false end
+	local player_name = player:get_player_name()
+	local self = session_entity(player_name)
+	if not self then return true end
+	if not can_edit_limits(player_name) then return true end
+	if vector.distance(player:get_pos(), self.object:get_pos()) > mod.resolve_limits(self).interaction_distance then
+		mod.sessions[player_name] = nil
+		minetest.close_formspec(player_name, LIMITS_FORMNAME)
+		return true
+	end
+	if fields.quit then
+		mod.sessions[player_name] = nil
+	elseif fields.back then
+		mod.show_conversation(player_name)
+	elseif fields.save then
+		local overrides = {}
+		local any = false
+		for _, item in ipairs(LIMIT_FIELDS) do
+			local raw = fields[item.key]
+			if type(raw) == "string" and raw:match("%S") then
+				local clamped = mod.clamp_limit(item.key, raw, nil)
+				if clamped then
+					overrides[item.key] = clamped
+					any = true
+				end
+			end
+		end
+		self._theocraft_limits = any and overrides or nil
+		mod.show_limits(player_name, any and "Saved." or "Saved. All fields inherit the global defaults.")
 	end
 	return true
 end)

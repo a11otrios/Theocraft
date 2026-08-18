@@ -23,3 +23,24 @@ theocraft_llm_allow_insecure_http (Allow non-HTTPS gateway) bool false
 
 # Maximum time to wait for a gateway response before using the offline interpreter.
 theocraft_llm_timeout_seconds (LLM request timeout) int 15 3 60
+
+[Villager Limits]
+
+# Default limits for every villager. Individual villagers can override these
+# in-game via the Limits button (needs the server privilege). A villager with
+# no override falls back to the value set here.
+
+# How many past turns of a conversation a villager remembers and re-sends.
+theocraft_history_entries (Conversation memory (turns)) int 20 2 200
+
+# Maximum length, in characters, of a message a player can send a villager.
+theocraft_message_length (Max player message length) int 500 50 4000
+
+# Maximum length, in characters, of a villager's spoken reply.
+theocraft_speech_length (Max villager reply length) int 700 50 4000
+
+# Largest quantity a villager will gather in a single instruction.
+theocraft_gather_count (Max gather count) int 8 1 64
+
+# How close, in blocks, a player must be to talk to a villager.
+theocraft_interaction_distance (Interaction distance (blocks)) int 7 1 32

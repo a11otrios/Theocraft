@@ -26,34 +26,36 @@ local function save_history(self, player_name, history)
 	if encoded then mod.storage:set_string(history_key(self, player_name), encoded) end
 end
 
-local function add_history(self, player_name, history, role, content)
-	history[#history + 1] = {role = role, content = mod.clean_text(content, mod.limits.speech_length)}
-	while #history > mod.limits.history_entries do table.remove(history, 1) end
+local function add_history(self, player_name, history, role, content, limits)
+	limits = limits or mod.limits
+	history[#history + 1] = {role = role, content = mod.clean_text(content, limits.speech_length)}
+	while #history > limits.history_entries do table.remove(history, 1) end
 	save_history(self, player_name, history)
 end
 
-local function fallback(self, player_name, message, identity, history, callback, reason)
-	local response = mod.offline_response(message, identity)
-	add_history(self, player_name, history, "villager", response.speech)
+local function fallback(self, player_name, message, identity, history, callback, reason, limits)
+	local response = mod.offline_response(message, identity, limits)
+	add_history(self, player_name, history, "villager", response.speech, limits)
 	callback(response, "offline", reason)
 end
 
 function mod.ask_villager(self, player, message, callback)
-	message = mod.clean_text(message, mod.limits.message_length)
+	local limits = mod.resolve_limits(self)
+	message = mod.clean_text(message, limits.message_length)
 	local identity = mod.identity_snapshot(self)
 	local player_name = player:get_player_name()
 	local history = mod.get_history(self, player_name)
-	add_history(self, player_name, history, "player", message)
+	add_history(self, player_name, history, "player", message, limits)
 
 	local enabled = minetest.settings:get_bool("theocraft_llm_enabled", false)
 	local endpoint = setting("theocraft_llm_endpoint", "")
 	if not enabled or endpoint == "" or not http then
 		return fallback(self, player_name, message, identity, history, callback,
-			not http and "HTTP permission unavailable" or "gateway disabled")
+			not http and "HTTP permission unavailable" or "gateway disabled", limits)
 	end
 	local is_https = endpoint:match("^https://") ~= nil
 	if not is_https and not minetest.settings:get_bool("theocraft_llm_allow_insecure_http", false) then
-		return fallback(self, player_name, message, identity, history, callback, "gateway URL must use HTTPS")
+		return fallback(self, player_name, message, identity, history, callback, "gateway URL must use HTTPS", limits)
 	end
 
 	local token = setting("theocraft_llm_access_token", ""):gsub("[\r\n]", "")
@@ -67,12 +69,12 @@ function mod.ask_villager(self, player, message, callback)
 		player = {name = player_name, position = vector.round(player:get_pos())},
 		message = message,
 		history = history,
-		allowed_actions = mod.allowed_actions(),
+		allowed_actions = mod.allowed_actions(limits),
 		model = setting("theocraft_llm_model", ""),
 		system_prompt = setting("theocraft_llm_system_prompt",
 			"Be concise, friendly, and stay in character."),
 	})
-	if not body then return fallback(self, player_name, message, identity, history, callback, json_error) end
+	if not body then return fallback(self, player_name, message, identity, history, callback, json_error, limits) end
 
 	http.fetch({
 		url = endpoint,
@@ -85,14 +87,14 @@ function mod.ask_villager(self, player, message, callback)
 	}, function(result)
 		if not result.succeeded or result.code < 200 or result.code >= 300 then
 			return fallback(self, player_name, message, identity, history, callback,
-				"gateway request failed with HTTP " .. tostring(result.code or 0))
+				"gateway request failed with HTTP " .. tostring(result.code or 0), limits)
 		end
 		local decoded, parse_error = minetest.parse_json(result.data, nil, true)
-		local response, validation_error = mod.normalise_response(decoded, identity.name)
+		local response, validation_error = mod.normalise_response(decoded, identity.name, limits)
 		if not response then
-			return fallback(self, player_name, message, identity, history, callback, parse_error or validation_error)
+			return fallback(self, player_name, message, identity, history, callback, parse_error or validation_error, limits)
 		end
-		add_history(self, player_name, history, "villager", response.speech)
+		add_history(self, player_name, history, "villager", response.speech, limits)
 		callback(response, "remote")
 	end)
 end
