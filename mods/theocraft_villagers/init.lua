@@ -8,6 +8,10 @@ theocraft_villagers = {
 	histories = {},
 	pending = {},
 	storage = minetest.get_mod_storage(),
+	-- request_http_api() only returns the handle when called from a mod's
+	-- init.lua top-level scope (the engine's security check rejects calls made
+	-- from dofile'd sub-files). Grab it here and hand it to llm.lua.
+	http = minetest.request_http_api and minetest.request_http_api() or nil,
 }
 
 local function load(name)

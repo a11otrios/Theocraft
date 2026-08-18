@@ -1,5 +1,7 @@
 local mod = theocraft_villagers
-local http = minetest.request_http_api()
+-- Provided by init.lua: request_http_api() must be called from the mod's
+-- top-level init scope or the engine denies it (returns nil here).
+local http = mod.http
 
 local function setting(name, default)
 	local value = minetest.settings:get(name)
