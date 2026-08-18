@@ -29,7 +29,7 @@ if ($robocopyExitCode -ge 8) {
 	throw "Failed to stage Theocraft for desktop testing (robocopy exit $robocopyExitCode)."
 }
 if (-not (Test-Path -LiteralPath $configuration)) {
-	@"
+	$initialConfig = @"
 secure.http_mods = theocraft_villagers
 enable_remote_media_server = false
 server_announce = false
@@ -40,7 +40,11 @@ theocraft_llm_endpoint = http://127.0.0.1:8713/
 theocraft_llm_model = qwen2.5:3b
 theocraft_llm_allow_insecure_http = true
 theocraft_llm_timeout_seconds = 30
-"@ | Set-Content -LiteralPath $configuration -Encoding UTF8
+"@
+	# Write UTF-8 WITHOUT a BOM. A BOM would attach to the first setting key
+	# (secure.http_mods), so the engine would fail to match it and deny the
+	# villager mod HTTP access (falling back to offline replies).
+	[System.IO.File]::WriteAllText($configuration, $initialConfig, (New-Object System.Text.UTF8Encoding($false)))
 }
 
 $env:LUANTI_USER_PATH = $profile
