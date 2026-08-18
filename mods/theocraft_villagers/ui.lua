@@ -28,7 +28,9 @@ local function history_text(self, player_name)
 	local lines = {}
 	local history = mod.get_history(self, player_name)
 	local first = math.max(1, #history - 7)
-	for index = first, #history do
+	-- Newest first, so the latest reply is always visible at the top without
+	-- having to scroll (a plain textarea can't auto-scroll to the bottom).
+	for index = #history, first, -1 do
 		local entry = history[index]
 		local speaker = entry.role == "player" and player_name or self._theocraft_name
 		lines[#lines + 1] = speaker .. ": " .. entry.content
@@ -43,24 +45,28 @@ function mod.show_conversation(player_name, status)
 		return
 	end
 	mod.ensure_identity(self)
-	local status_text = status and ("Status: " .. status) or ""
+	local status_text = status or ""
+	local limits_button = can_edit_limits(player_name)
+		and "button[5.1,5.35;2.3,0.7;limits;Limits]" or ""
 	local formspec = table.concat({
 		"formspec_version[4]",
-		"size[12,9]",
-		"label[0.55,0.45;", minetest.formspec_escape(self._theocraft_name), "]",
-		"textarea[0.5,0.75;11,1.35;;;", minetest.formspec_escape(self._theocraft_bio), "]",
-		"textarea[0.5,2.05;11,3.65;history;;", minetest.formspec_escape(history_text(self, player_name)), "]",
-		"label[0.55,5.85;", minetest.formspec_escape("Carrying: " .. mod.inventory_summary(self)), "]",
-		"field[0.55,6.45;8.1,0.9;message;Say something or give an instruction;]",
+		"size[10,6.2]",
+		-- Pin the box's bottom-centre to the screen's bottom-centre so it sits
+		-- out of the way at the bottom instead of filling the middle.
+		"position[0.5,1.0]",
+		"anchor[0.5,1.0]",
+		"label[0.3,0.4;", minetest.formspec_escape(self._theocraft_name), "]",
+		"textarea[0.3,0.7;9.4,3.4;history;;", minetest.formspec_escape(history_text(self, player_name)), "]",
+		"field[0.3,4.35;6.7,0.85;message;;]",
 		"field_close_on_enter[message;false]",
 		"field_enter_after_edit[message;true]",
 		"set_focus[message;true]",
-		"button[8.8,6.35;2.65,0.85;send;Send]",
-		"button[0.55,7.45;2.4,0.8;trade;Trade]",
-		"button[3.15,7.45;2.4,0.8;take;Take items]",
-		can_edit_limits(player_name) and "button[5.75,7.45;2.4,0.8;limits;Limits]" or "",
-		"button_exit[9.05,7.45;2.4,0.8;close;Close]",
-		"label[0.55,8.45;", minetest.formspec_escape(status_text), "]",
+		"button[7.1,4.3;2.6,0.95;send;Send]",
+		"button[0.3,5.35;2.3,0.7;trade;Trade]",
+		"button[2.7,5.35;2.3,0.7;take;Take]",
+		limits_button,
+		"button_exit[7.6,5.35;2.3,0.7;close;Close]",
+		status_text ~= "" and ("label[0.3,6.0;" .. minetest.formspec_escape(status_text) .. "]") or "",
 	})
 	minetest.show_formspec(player_name, FORMNAME, formspec)
 end
