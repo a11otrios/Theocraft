@@ -16,7 +16,10 @@ param(
     [string]$Model = "qwen2.5:3b",
     [int]$Port = 8713,
     [string]$Token = "",
-    [string]$KeepAlive = "30m"
+    [string]$KeepAlive = "30m",
+    # Force CPU inference. Use this if Ollama's GPU/CUDA backend crashes
+    # (e.g. "llama-server process has terminated ... CUDA error").
+    [switch]$CpuOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -67,6 +70,10 @@ $env:GATEWAY_PORT = "$Port"
 $env:OLLAMA_MODEL = $Model
 $env:OLLAMA_KEEP_ALIVE = $KeepAlive
 $env:THEOCRAFT_GATEWAY_TOKEN = $Token
+if ($CpuOnly) {
+    $env:OLLAMA_NUM_GPU = "0"
+    Write-Host "  Inference        : CPU only" -ForegroundColor Yellow
+}
 
 $python = (Get-Command python -ErrorAction SilentlyContinue).Source
 if (-not $python) { $python = (Get-Command py -ErrorAction SilentlyContinue).Source }

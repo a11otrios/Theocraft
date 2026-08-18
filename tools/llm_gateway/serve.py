@@ -52,6 +52,10 @@ OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
 OLLAMA_NUM_PREDICT = int(os.environ.get("OLLAMA_NUM_PREDICT", "200"))
 OLLAMA_TEMPERATURE = float(os.environ.get("OLLAMA_TEMPERATURE", "0.7"))
 OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT", "60"))
+# Force CPU by setting OLLAMA_NUM_GPU=0 (useful when the GPU/CUDA backend
+# crashes). Leave unset to let Ollama auto-detect the GPU.
+_num_gpu = os.environ.get("OLLAMA_NUM_GPU", "").strip()
+OLLAMA_NUM_GPU = int(_num_gpu) if _num_gpu else None
 
 # Maximum request body we will read, to avoid an accidental huge payload.
 MAX_BODY_BYTES = 256 * 1024
@@ -111,6 +115,62 @@ def build_system_prompt(payload):
     return "\n\n".join(parts)
 
 
+KNOWN_ACTION_TYPES = ["none", "follow", "stay", "come", "gather", "build"]
+
+
+def build_format(payload):
+    """A JSON schema constraining the reply shape, so even small models can't
+    emit malformed or nested JSON. The action is an anyOf of per-type shapes
+    limited to what this request allows, so e.g. a gather action is forced to
+    carry a resource and count and a build action a blueprint."""
+    variants = []
+    for entry in payload.get("allowed_actions") or []:
+        if not isinstance(entry, dict) or entry.get("type") not in KNOWN_ACTION_TYPES:
+            continue
+        atype = entry["type"]
+        if atype == "gather":
+            resources = [str(r) for r in entry.get("resources", [])] or ["wood", "stone", "dirt", "sand"]
+            variants.append({
+                "type": "object",
+                "properties": {
+                    "type": {"const": "gather"},
+                    "resource": {"type": "string", "enum": resources},
+                    "count": {"type": "integer"},
+                },
+                "required": ["type", "resource", "count"],
+            })
+        elif atype == "build":
+            blueprints = [str(b) for b in entry.get("blueprints", [])] or ["wall", "shelter"]
+            variants.append({
+                "type": "object",
+                "properties": {
+                    "type": {"const": "build"},
+                    "blueprint": {"type": "string", "enum": blueprints},
+                },
+                "required": ["type", "blueprint"],
+            })
+        else:  # none, follow, stay, come
+            variants.append({
+                "type": "object",
+                "properties": {"type": {"const": atype}},
+                "required": ["type"],
+            })
+    if not variants:
+        variants.append({
+            "type": "object",
+            "properties": {"type": {"type": "string", "enum": list(KNOWN_ACTION_TYPES)}},
+            "required": ["type"],
+        })
+    return {
+        "type": "object",
+        "properties": {
+            "speech": {"type": "string"},
+            "action": {"anyOf": variants},
+        },
+        "required": ["speech", "action"],
+    }
+
+
 def build_messages(payload):
     """Assemble the append-only chat: stable system, verbatim history, newest turn last."""
     messages = [{"role": "system", "content": build_system_prompt(payload)}]
@@ -140,13 +200,15 @@ def call_ollama(payload):
         "model": model,
         "messages": build_messages(payload),
         "stream": False,
-        "format": "json",
+        "format": build_format(payload),
         "keep_alive": OLLAMA_KEEP_ALIVE,
         "options": {
             "temperature": OLLAMA_TEMPERATURE,
             "num_predict": OLLAMA_NUM_PREDICT,
         },
     }
+    if OLLAMA_NUM_GPU is not None:
+        request_body["options"]["num_gpu"] = OLLAMA_NUM_GPU
     data = json.dumps(request_body).encode("utf-8")
     req = urllib.request.Request(
         f"{OLLAMA_URL}/api/chat",

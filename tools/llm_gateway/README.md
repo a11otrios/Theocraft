@@ -84,6 +84,20 @@ Optionally set a shared token so a random device on your network can't drive you
 villagers: pass `-Token secret123` to the run script **and** set
 `theocraft_llm_access_token = secret123` in the game.
 
+## Troubleshooting
+
+**Ollama crashes with a CUDA / GPU error** (e.g. `llama-server process has
+terminated ... CUDA error`, or the bridge keeps returning 502). Ollama's GPU
+backend is failing on this machine. Run on CPU instead — `qwen2.5:3b` answers a
+villager in a few seconds on CPU:
+
+```powershell
+.\scripts\Run-LlmGateway.ps1 -CpuOnly
+```
+
+(Equivalently, set `OLLAMA_NUM_GPU=0` before starting `serve.py`.) A proper GPU
+fix usually means updating the NVIDIA driver and/or Ollama.
+
 ## How it stays fast (KV-cache reuse)
 
 Ollama/llama.cpp keeps the model's KV cache and reuses the longest common
