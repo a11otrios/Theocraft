@@ -50,7 +50,7 @@ OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:3b")
 OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
 OLLAMA_NUM_PREDICT = int(os.environ.get("OLLAMA_NUM_PREDICT", "200"))
-OLLAMA_TEMPERATURE = float(os.environ.get("OLLAMA_TEMPERATURE", "0.7"))
+OLLAMA_TEMPERATURE = float(os.environ.get("OLLAMA_TEMPERATURE", "0.85"))
 OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT", "60"))
 # Force CPU by setting OLLAMA_NUM_GPU=0 (useful when the GPU/CUDA backend
 # crashes). Leave unset to let Ollama auto-detect the GPU.
@@ -89,6 +89,60 @@ def describe_actions(allowed_actions):
     return "\n".join(lines)
 
 
+# Give each villager a distinct, consistent character. Traits are picked
+# deterministically from the villager's id/name so the same villager always has
+# the same personality, but different villagers differ.
+PERSONALITIES = [
+    "warm, chatty, and quick to laugh",
+    "gruff and blunt, but kind underneath",
+    "shy and soft-spoken, choosing your words carefully",
+    "boastful and dramatic, always with a story to tell",
+    "endlessly curious and a little bit nosy",
+    "dry, sarcastic, and hard to impress",
+    "cheerful and easily delighted by small things",
+    "world-weary and a touch philosophical",
+    "a hopeless gossip who loves village rumours",
+    "practical and no-nonsense, straight to the point",
+    "dreamy and poetic, with your head in the clouds",
+    "anxious and fidgety, prone to worrying",
+    "jolly and generous, treating everyone like an old friend",
+    "proud and stubborn, quite set in your ways",
+    "mischievous, with a teasing sense of humour",
+]
+INTERESTS = [
+    "You love talking about food and whatever's cooking.",
+    "You're a bit obsessed with the weather and the seasons.",
+    "You always seem to have the latest village gossip.",
+    "You miss the old days and love to reminisce.",
+    "You're fascinated by the player as a stranger from far away.",
+    "You collect odd little trinkets and like to show them off.",
+    "You hum old songs and only half-remember the words.",
+    "You fret about wolves and things that lurk in the dark.",
+    "You take great pride in your trade.",
+    "You secretly dream of leaving to see the wider world.",
+    "You dote on the village animals.",
+    "You love a good tall tale and tend to exaggerate.",
+    "You have strong (and loud) opinions about your neighbours.",
+    "You're a bit of a homebody who loves a quiet evening.",
+]
+MOODS = [
+    "in a great mood today",
+    "a little tired and grumpy today",
+    "feeling especially talkative today",
+    "feeling wistful today",
+    "in unusually high spirits today",
+    "a bit distracted today",
+]
+
+
+def _seed(text):
+    """Small deterministic hash (Python's hash() is salted per process)."""
+    h = 0
+    for ch in text:
+        h = (h * 131 + ord(ch)) & 0xFFFFFFFF
+    return h
+
+
 def build_system_prompt(payload):
     """Stable persona + rules. Deliberately excludes positions and other volatile data."""
     villager = payload.get("villager") or {}
@@ -98,9 +152,20 @@ def build_system_prompt(payload):
     extra = str(payload.get("system_prompt") or "").strip()
     actions = describe_actions(payload.get("allowed_actions"))
 
+    seed = _seed(str(villager.get("id") or name))
+    personality = PERSONALITIES[seed % len(PERSONALITIES)]
+    interest = INTERESTS[(seed // 7) % len(INTERESTS)]
+    mood = MOODS[(seed // 13) % len(MOODS)]
+
     parts = [
-        f"You are {name}, a {profession} living in a village. {bio}".strip(),
-        "You are talking with a player in a voxel survival game. Stay in character.",
+        f"You are {name}, a {profession} in a small village. {bio}".strip(),
+        f"Your personality: you are {personality}. {interest} You're {mood}.",
+        "You are a real person with your own life, moods, and opinions — NOT a helper, "
+        "assistant, or quest-giver, and NOT an AI. Never list your abilities or offer your "
+        "services unless it comes up naturally. Just chat the way a villager would: talk about "
+        "your day, your trade, the village and its people, rumours, the weather, or turn it "
+        "around and ask the player about themselves. Have preferences, feelings and opinions. "
+        "Keep replies short (1-2 sentences), casual, and in character.",
     ]
     if extra:
         parts.append(extra)
