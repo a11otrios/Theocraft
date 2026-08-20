@@ -21,6 +21,13 @@ theocraft_llm_system_prompt (Extra villager instructions) string Be concise, fri
 # Only enable this for development with a gateway on a trusted local network.
 theocraft_llm_allow_insecure_http (Allow non-HTTPS gateway) bool false
 
+# Show each villager's reply as a floating speech bubble above their head.
+theocraft_speech_bubbles (Show villager speech bubbles) bool true
+
+# Play a short pitched voice murmur when a villager speaks. Each villager has a
+# consistent voice; no real words, just an Animal-Crossing-style burble.
+theocraft_speech_voice (Play villager voice murmurs) bool true
+
 # Maximum time to wait for a gateway response before using the offline interpreter.
 theocraft_llm_timeout_seconds (LLM request timeout) int 15 3 60
 

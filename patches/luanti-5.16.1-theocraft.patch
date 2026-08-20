@@ -4,7 +4,7 @@ diff --git a/android/app/build.gradle b/android/app/build.gradle
 @@ -6 +6 @@ android {
 -		applicationId 'net.minetest.minetest'
 +		applicationId 'dev.theocraft.android'
-@@ -12,0 +13 @@ android {
+@@ -11,0 +12 @@ android {
 +		resourceConfigurations += ['en']
 @@ -89,0 +90,3 @@ task prepareAssets() {
 +		copy {

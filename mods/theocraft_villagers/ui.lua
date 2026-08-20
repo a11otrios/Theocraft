@@ -24,18 +24,25 @@ local function session_entity(player_name)
 	return entity
 end
 
+-- Rough chars-per-line for the history box, used only to size the scrollable
+-- area. Slightly generous (few chars/line) so we over-estimate height and never
+-- clip text; any extra is just reachable blank space below.
+local HIST_WRAP = 40
+
+-- Build the history newest-first so the latest reply is on top and visible the
+-- moment the box opens, with older turns reachable by dragging the scrollbar.
+-- Returns the text and an approximate wrapped-line count for sizing.
 local function history_text(self, player_name)
-	local lines = {}
 	local history = mod.get_history(self, player_name)
-	-- Natural chat order: oldest first, newest at the bottom. The box scrolls,
-	-- and show_conversation starts it at the bottom, so show a good chunk.
-	local first = math.max(1, #history - 11)
-	for index = first, #history do
+	local lines, rows = {}, 0
+	for index = #history, 1, -1 do
 		local entry = history[index]
 		local speaker = entry.role == "player" and player_name or self._theocraft_name
-		lines[#lines + 1] = speaker .. ": " .. entry.content
+		local line = speaker .. ": " .. entry.content
+		lines[#lines + 1] = line
+		rows = rows + math.max(1, math.ceil(#line / HIST_WRAP))
 	end
-	return table.concat(lines, "\n")
+	return table.concat(lines, "\n"), rows
 end
 
 function mod.show_conversation(player_name, status)
@@ -49,20 +56,15 @@ function mod.show_conversation(player_name, status)
 	local limits_button = can_edit_limits(player_name)
 		and "button[4.15,4.55;1.9,0.6;limits;Limits]" or ""
 
-	-- The history lives in a scroll container so it can start scrolled to the
-	-- bottom (a plain textarea always opens at the top). Estimate the wrapped
-	-- content height, then set the scrollbar to the bottom so the latest reply
-	-- is what you see. Over-estimate slightly (few chars/line) so we never stop
-	-- short of the newest message.
-	local hist = history_text(self, player_name)
+	-- History in a scroll container so older turns are reachable, but anchored at
+	-- the TOP showing the newest reply first. This avoids the old scroll-to-bottom
+	-- math, which over-shot on mobile and parked the view in blank space. The
+	-- content height is a generous estimate; over-estimating only leaves reachable
+	-- blank below, never hides text.
+	local hist, hist_rows = history_text(self, player_name)
 	local hist_h = 2.9
-	local n_lines = 0
-	for line in (hist .. "\n"):gmatch("(.-)\n") do
-		n_lines = n_lines + math.max(1, math.ceil(#line / 38))
-	end
-	local content_h = math.max(hist_h, n_lines * 0.5 + 0.2)
-	local overflow = content_h - hist_h
-	local scroll_factor = overflow > 0 and (overflow / 1000) or 0
+	local content_h = math.max(hist_h, hist_rows * 0.5 + 0.2)
+	local scroll_factor = math.max(0.0001, (content_h - hist_h) / 1000)
 
 	local formspec = table.concat({
 		"formspec_version[4]",
@@ -72,8 +74,10 @@ function mod.show_conversation(player_name, status)
 		"position[0.5,1.0]",
 		"anchor[0.5,1.0]",
 		-- Flat, borderless history so the box reads thin, not chunky. The input
-		-- field keeps its border so it's clearly tappable.
-		"style_type[textarea;border=false]",
+		-- field keeps its border so it's clearly tappable. textarea text defaults
+		-- to white, which is invisible on VoxeLibre's light form background, so
+		-- force a dark colour for the read-only history.
+		"style_type[textarea;border=false;textcolor=#222222]",
 		"label[0.25,0.3;", minetest.formspec_escape(self._theocraft_name), "]",
 		"scrollbaroptions[max=1000;thumbsize=120]",
 		"scroll_container[0.25,0.55;8.05,", tostring(hist_h), ";histbar;vertical;",
@@ -82,8 +86,8 @@ function mod.show_conversation(player_name, status)
 		-- field that hijacks the keyboard when tapped.
 		"textarea[0,0;8.05,", tostring(content_h), ";;;", minetest.formspec_escape(hist), "]",
 		"scroll_container_end[]",
-		-- value 1000 (= max) starts the view scrolled to the bottom.
-		"scrollbar[8.35,0.55;0.25,", tostring(hist_h), ";vertical;histbar;1000]",
+		-- Start at value 0 = top = newest message (history is newest-first).
+		"scrollbar[8.35,0.55;0.25,", tostring(hist_h), ";vertical;histbar;0]",
 		"field[0.25,3.65;5.45,0.7;message;;]",
 		"field_close_on_enter[message;false]",
 		"field_enter_after_edit[message;true]",
@@ -158,6 +162,7 @@ local function send_message(player, self, fields)
 		local current = session_entity(player_name)
 		local current_player = minetest.get_player_by_name(player_name)
 		if not current or not current_player then return end
+		mod.villager_say(current, response.speech)
 		local result = mod.apply_action(current, current_player, response.action)
 		local status = source == "remote" and "Remote LLM" or "Offline interpreter"
 		if warning then status = status .. " (" .. mod.clean_text(warning, 100) .. ")" end

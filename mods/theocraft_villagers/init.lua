@@ -22,6 +22,7 @@ load("identity")
 load("policy")
 load("actions")
 load("llm")
+load("speech")
 load("ui")
 load("integration")
 
