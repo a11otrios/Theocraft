@@ -23,6 +23,7 @@ load("policy")
 load("actions")
 load("llm")
 load("speech")
+load("locate")
 load("ui")
 load("integration")
 
