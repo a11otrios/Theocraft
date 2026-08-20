@@ -1,18 +1,15 @@
 local mod = theocraft_villagers
 
--- In-world "speech" for villagers: a floating text bubble above the head plus a
--- short pitched voice murmur when they reply. Both effects reuse assets already
--- shipped by VoxeLibre (the mobs_mc_villager.* sounds) and are pure Lua, so this
--- works on Android with no engine or gateway changes. Each is independently
--- toggleable via settings.
-
-local BUBBLE_ENTITY = "theocraft_villagers:speech_bubble"
-local WRAP_WIDTH = 24      -- characters per bubble line before wrapping
-local MAX_LINES = 4        -- cap bubble height; excess is truncated with an ellipsis
-local BUBBLE_MAX_LIFE = 10 -- absolute safety lifetime (seconds) if the parent vanishes
+-- Villager voice when they reply:
+--   * real spoken audio when the gateway supplies a TTS clip (played positionally
+--     from the villager via dynamic_add_media), or
+--   * a pitched voice murmur (reusing VoxeLibre's mobs_mc_villager.* sounds) as a
+--     fallback when there's no TTS clip (offline, or TTS disabled).
+-- Pure Lua; the TTS path needs no engine changes, just the runtime-media API.
+-- Toggle the whole thing off with the theocraft_speech_voice setting.
 
 -- Small deterministic hash, matching the style used in identity.lua so a
--- villager's voice stays stable across sessions (keyed on its persistent UUID).
+-- villager's murmur pitch stays stable across sessions (keyed on its UUID).
 local function stable_number(value)
 	local total = 0
 	value = tostring(value or "")
@@ -22,99 +19,13 @@ local function stable_number(value)
 	return total
 end
 
-local function bool_setting(name)
-	-- Default ON: both effects are enabled unless the player turns them off.
-	return minetest.settings:get_bool(name, true)
+local function voice_enabled()
+	return minetest.settings:get_bool("theocraft_speech_voice", true)
 end
 
--- Wrap plain text to a few short lines for the nametag bubble. Nametags render
--- on a single line unless we insert the newlines ourselves.
-local function wrap_text(text)
-	text = tostring(text or ""):gsub("%s+", " "):match("^%s*(.-)%s*$") or ""
-	if text == "" then return "" end
-	local lines, line = {}, ""
-	for word in text:gmatch("%S+") do
-		if line == "" then
-			line = word
-		elseif #line + 1 + #word <= WRAP_WIDTH then
-			line = line .. " " .. word
-		else
-			lines[#lines + 1] = line
-			line = word
-			if #lines >= MAX_LINES then break end
-		end
-	end
-	if #lines < MAX_LINES and line ~= "" then
-		lines[#lines + 1] = line
-	elseif #lines >= MAX_LINES then
-		-- Ran out of room: mark the last kept line as truncated.
-		lines[MAX_LINES] = lines[MAX_LINES] .. "\226\128\166" -- "…" (UTF-8, LuaJIT-safe)
-	end
-	return table.concat(lines, "\n")
-end
-
--- A camera-facing text label attached above a villager's head. Invisible sprite;
--- only its nametag is seen. Never saved to the world (static_save = false).
-minetest.register_entity(BUBBLE_ENTITY, {
-	initial_properties = {
-		visual = "sprite",
-		visual_size = {x = 0.1, y = 0.1},
-		-- "blank.png" is a built-in Luanti texture (a 1x1 transparent pixel), so
-		-- the sprite is invisible and only the nametag shows. Avoids shipping our
-		-- own tiny PNG.
-		textures = {"blank.png"},
-		physical = false,
-		pointable = false,
-		collide_with_objects = false,
-		static_save = false,
-		nametag = "",
-		nametag_color = "#ffffff",
-	},
-	on_activate = function(self)
-		self.timer = 0
-		self.life = BUBBLE_MAX_LIFE
-	end,
-	on_step = function(self, dtime)
-		self.timer = self.timer + dtime
-		if self.timer >= (self.life or BUBBLE_MAX_LIFE) then
-			self.object:remove()
-		end
-	end,
-})
-
-local function remove_bubble(villager)
-	local bubble = villager._theocraft_bubble
-	if bubble and bubble:get_luaentity() then
-		bubble:remove()
-	end
-	villager._theocraft_bubble = nil
-end
-
-local function show_bubble(villager, text)
-	local wrapped = wrap_text(text)
-	if wrapped == "" then return end
-	local pos = villager.object and villager.object:get_pos()
-	if not pos then return end
-
-	remove_bubble(villager)
-
-	local bubble = minetest.add_entity(pos, BUBBLE_ENTITY)
-	if not bubble then return end
-	-- Offset is in the villager's local attach space (~1/10 node units); y ~= 19
-	-- floats it just above the head. May need a small tune per model.
-	bubble:set_attach(villager.object, "", {x = 0, y = 19, z = 0}, {x = 0, y = 0, z = 0})
-	bubble:set_properties({nametag = wrapped})
-
-	local entity = bubble:get_luaentity()
-	if entity then
-		-- Keep the bubble up long enough to read; scales with length.
-		local words = select(2, wrapped:gsub("%S+", ""))
-		entity.life = math.max(2, math.min(8, 2 + words * 0.35))
-	end
-	villager._theocraft_bubble = bubble
-end
-
-local function play_voice(villager, text)
+-- Fallback "murmur": a short burst of VoxeLibre's villager idle sound, pitched
+-- per villager, when the gateway didn't send real speech.
+local function play_murmur(villager, text)
 	local obj = villager.object
 	if not obj or not obj:get_pos() then return end
 	local words = select(2, tostring(text or ""):gsub("%S+", ""))
@@ -134,14 +45,50 @@ local function play_voice(villager, text)
 	end
 end
 
--- Entry point: called with the finished reply text whenever a villager speaks
--- (both remote LLM and offline fallback replies flow through here).
-function mod.villager_say(villager, text)
+-- Real text-to-speech: the gateway sends the reply as a base64 Ogg Vorbis clip;
+-- we hand the raw bytes to the engine at runtime with dynamic_add_media, then
+-- play them positionally from the villager. Returns true if playback was started.
+local tts_counter = 0
+
+local function play_tts(villager, player_name, audio_b64)
+	if type(audio_b64) ~= "string" or audio_b64 == "" then return false end
+	if not (minetest.decode_base64 and minetest.dynamic_add_media) then return false end
+	local data = minetest.decode_base64(audio_b64)
+	if not data or data == "" then return false end
+	local obj = villager.object
+	if not obj or not obj:get_pos() then return false end
+
+	tts_counter = tts_counter + 1
+	local sound_name = "tc_tts_" .. tts_counter
+	local ok = minetest.dynamic_add_media({
+		filename = sound_name .. ".ogg",
+		filedata = data,
+		ephemeral = true,        -- one-shot; the engine forgets it after delivery
+		to_player = player_name, -- only the listening player needs it
+	}, function()
+		-- Fires once the client has the media. Guard the villager still existing.
+		if not obj or not obj:get_pos() then return end
+		-- ephemeral sound: fire-and-forget, returns no handle (that's expected).
+		minetest.sound_play(sound_name, {
+			object = obj,
+			gain = 1.0,
+			max_hear_distance = 24,
+		}, true)
+	end)
+	return ok ~= false
+end
+
+-- Entry point: called with the finished reply whenever a villager speaks (both
+-- remote LLM and offline fallback replies flow through here). `player` is the
+-- listening player (object or name); `audio_b64` is the optional TTS clip.
+function mod.villager_say(villager, player, text, audio_b64)
 	if not villager or not villager.object then return end
-	if bool_setting("theocraft_speech_bubbles") then
-		show_bubble(villager, text)
-	end
-	if bool_setting("theocraft_speech_voice") then
-		play_voice(villager, text)
+	if not voice_enabled() then return end
+	local player_name = type(player) == "string" and player
+		or (player and player.get_player_name and player:get_player_name())
+	-- Prefer real speech when the gateway supplied it; otherwise fall back to the
+	-- pitched murmur so villagers still make a sound offline.
+	if not (player_name and play_tts(villager, player_name, audio_b64)) then
+		play_murmur(villager, text)
 	end
 end

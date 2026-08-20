@@ -162,7 +162,7 @@ local function send_message(player, self, fields)
 		local current = session_entity(player_name)
 		local current_player = minetest.get_player_by_name(player_name)
 		if not current or not current_player then return end
-		mod.villager_say(current, response.speech)
+		mod.villager_say(current, current_player, response.speech, response.audio_b64)
 		local result = mod.apply_action(current, current_player, response.action)
 		local status = source == "remote" and "Remote LLM" or "Offline interpreter"
 		if warning then status = status .. " (" .. mod.clean_text(warning, 100) .. ")" end

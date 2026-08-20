@@ -84,6 +84,41 @@ Optionally set a shared token so a random device on your network can't drive you
 villagers: pass `-Token secret123` to the run script **and** set
 `theocraft_llm_access_token = secret123` in the game.
 
+## 4. Villager voices (text-to-speech, optional)
+
+The gateway can also speak each reply and return it as a clip the game plays out
+of the villager. `Run-LlmGateway.ps1 -Voice auto` (the default) uses **Piper** if
+it is installed, otherwise the **Windows built-in voices**.
+
+Encoding the audio needs one small Python package (bundles libsndfile, no system
+binary):
+
+```powershell
+python -m pip install soundfile
+```
+
+**Windows voices (SAPI) — zero setup.** Uses whatever voices Windows has
+installed; each villager gets a stable voice + speaking rate. Limited to the
+installed voices (often one or two). `.\scripts\Run-LlmGateway.ps1 -Voice sapi`.
+
+**Piper — natural voices with genders and accents (recommended).** Download the
+Windows build and a few voice models into `.tools\piper`:
+
+```
+.tools\piper\piper\piper.exe                       # from rhasspy/piper releases
+.tools\piper\voices\en_US-ryan-medium.onnx (+.json)   # male, US
+.tools\piper\voices\en_GB-alan-medium.onnx (+.json)   # male, GB
+.tools\piper\voices\en_US-amy-medium.onnx (+.json)    # female, US
+.tools\piper\voices\en_GB-jenny_dioco-medium.onnx (+.json) # female, GB
+```
+
+Voice models come from the `rhasspy/piper-voices` repository. `Run-LlmGateway.ps1`
+auto-detects this layout; each villager is matched to a voice of its (name-derived)
+gender, chosen stably by id, so a villager always sounds the same. Add more
+`.onnx` voices and register them in `PIPER_VOICE_REGISTRY` in `serve.py`.
+
+Disable voices entirely with `-Voice none`.
+
 ## Troubleshooting
 
 **Ollama crashes with a CUDA / GPU error** (e.g. `llama-server process has
@@ -137,3 +172,7 @@ All optional, via environment variables (the run script sets the common ones):
 | `OLLAMA_NUM_PREDICT`       | `200`                    | Max reply tokens.                               |
 | `OLLAMA_TEMPERATURE`       | `0.7`                    | Sampling temperature.                           |
 | `OLLAMA_TIMEOUT`           | `60`                     | Seconds to wait on Ollama.                      |
+| `TTS_ENABLED`              | *(unset)*                | Set to `1` to synthesize villager voices.       |
+| `TTS_ENGINE`               | `piper`                  | `piper`, `sapi` (Windows voices), or `none`.    |
+| `PIPER_BIN`                | `piper`                  | Path to `piper.exe`.                             |
+| `PIPER_VOICE_DIR`          | *(unset)*                | Folder holding the Piper `.onnx` voice models.  |

@@ -34,9 +34,17 @@ Return a JSON object:
 ```json
 {
   "speech": "Of course. Lead the way.",
-  "action": {"type": "follow"}
+  "action": {"type": "follow"},
+  "audio_b64": "<optional base64 Ogg Vorbis>"
 }
 ```
+
+`audio_b64` is optional. When present it must be a base64-encoded **mono Ogg
+Vorbis** clip of `speech`; the game plays it positionally from the villager (and
+falls back to a generated murmur when it is absent). Only mono is played
+positionally, so downmix stereo before encoding. Keep clips short — the reply is
+already length-capped. If synthesis fails, omit the field and still return a
+valid response.
 
 The gateway may only select actions advertised in `allowed_actions`. The game still validates every response, clamps counts, limits action range, checks protected areas, and rejects arbitrary node or command execution. Invalid, unavailable, or slow gateways automatically fall back to the offline instruction interpreter.
 

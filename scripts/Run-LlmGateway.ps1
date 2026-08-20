@@ -19,7 +19,11 @@ param(
     [string]$KeepAlive = "30m",
     # Force CPU inference. Use this if Ollama's GPU/CUDA backend crashes
     # (e.g. "llama-server process has terminated ... CUDA error").
-    [switch]$CpuOnly
+    [switch]$CpuOnly,
+    # Villager text-to-speech engine. "auto" uses Piper if it's installed under
+    # .tools\piper, otherwise the Windows built-in voices (SAPI); "none" disables.
+    [ValidateSet("auto", "piper", "sapi", "none")]
+    [string]$Voice = "auto"
 )
 
 $ErrorActionPreference = "Stop"
@@ -73,6 +77,28 @@ $env:THEOCRAFT_GATEWAY_TOKEN = $Token
 if ($CpuOnly) {
     $env:OLLAMA_NUM_GPU = "0"
     Write-Host "  Inference        : CPU only" -ForegroundColor Yellow
+}
+
+# Villager voices (text-to-speech). Resolve "auto" to Piper when it is installed,
+# otherwise the Windows built-in voices.
+$piperExe = Join-Path $repositoryRoot ".tools\piper\piper\piper.exe"
+$piperVoices = Join-Path $repositoryRoot ".tools\piper\voices"
+$piperReady = (Test-Path -LiteralPath $piperExe) -and (Test-Path -LiteralPath $piperVoices)
+$engine = $Voice
+if ($engine -eq "auto") { $engine = if ($piperReady) { "piper" } else { "sapi" } }
+
+if ($engine -eq "none") {
+    $env:TTS_ENABLED = ""
+    Write-Host "  Villager voices  : off" -ForegroundColor Yellow
+} else {
+    $env:TTS_ENABLED = "1"
+    $env:TTS_ENGINE = $engine
+    if ($engine -eq "piper") {
+        if (-not $piperReady) { throw "Piper not found under .tools\piper. Run with -Voice sapi, or install Piper." }
+        $env:PIPER_BIN = $piperExe
+        $env:PIPER_VOICE_DIR = $piperVoices
+    }
+    Write-Host "  Villager voices  : $engine" -ForegroundColor Green
 }
 
 $python = (Get-Command python -ErrorAction SilentlyContinue).Source

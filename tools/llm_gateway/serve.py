@@ -36,9 +36,13 @@ Configuration (environment variables)
 
 from __future__ import annotations
 
+import base64
+import io
 import json
 import os
+import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -59,6 +63,50 @@ OLLAMA_NUM_GPU = int(_num_gpu) if _num_gpu else None
 
 # Maximum request body we will read, to avoid an accidental huge payload.
 MAX_BODY_BYTES = 256 * 1024
+
+# ---------------------------------------------------------------------------
+# Text-to-speech (optional). When enabled, the reply text is synthesized to an
+# Ogg Vorbis clip and returned base64-encoded as ``audio_b64``; the game plays it
+# out of the villager. Any failure just omits the audio so chat is never broken.
+#
+# * ``TTS_ENABLED``  turn the whole feature on (default off)
+# * ``TTS_ENGINE``   piper | espeak | test | none  (default piper)
+# * ``TTS_TEST_OGG`` engine=test: path to a fixed .ogg returned for every reply
+#                    (used to prove client playback before installing a real TTS)
+# * ``PIPER_BIN``    piper executable (default "piper")
+# * ``PIPER_VOICES`` comma-separated .onnx voice models; one is picked per villager
+# * ``PIPER_MODEL``  single default .onnx model (used if PIPER_VOICES is unset)
+# * ``ESPEAK_BIN``   espeak-ng executable (default "espeak-ng")
+# * ``FFMPEG_BIN``   ffmpeg executable used to encode WAV -> Ogg Vorbis (default "ffmpeg")
+TTS_ENABLED = os.environ.get("TTS_ENABLED", "").strip().lower() in ("1", "true", "yes", "on")
+TTS_ENGINE = os.environ.get("TTS_ENGINE", "piper").strip().lower()
+TTS_TEST_OGG = os.environ.get("TTS_TEST_OGG", "").strip()
+PIPER_BIN = os.environ.get("PIPER_BIN", "piper").strip()
+# Directory holding the downloaded Piper .onnx voice models (+ .onnx.json).
+PIPER_VOICE_DIR = os.environ.get("PIPER_VOICE_DIR", "").strip()
+
+# Known voices and their (gender, accent). A villager is matched to a voice of
+# its gender; the specific voice (hence accent) is then stable per villager id.
+PIPER_VOICE_REGISTRY = [
+    ("en_US-ryan-medium", "male", "US"),
+    ("en_GB-alan-medium", "male", "GB"),
+    ("en_US-amy-medium", "female", "US"),
+    ("en_GB-jenny_dioco-medium", "female", "GB"),
+]
+
+# Villager first names (from the mod's identity.lua) mapped to a voice gender so
+# obviously-gendered names get a matching voice. Unknown names fall back to a
+# stable hash of the id.
+NAME_GENDER = {
+    "ada": "female", "anika": "female", "cora": "female", "dara": "female",
+    "esme": "female", "farah": "female", "hana": "female", "jora": "female",
+    "lina": "female", "mara": "female", "orla": "female", "rhea": "female",
+    "talia": "female", "uma": "female", "vero": "female",
+    "alden": "male", "bram": "male", "elian": "male", "galen": "male",
+    "ivo": "male", "kellan": "male", "niko": "male", "pavel": "male", "soren": "male",
+}
+ESPEAK_BIN = os.environ.get("ESPEAK_BIN", "espeak-ng").strip()
+FFMPEG_BIN = os.environ.get("FFMPEG_BIN", "ffmpeg").strip()
 
 
 def describe_actions(allowed_actions):
@@ -312,6 +360,150 @@ def to_theocraft_response(content):
     return {"speech": speech, "action": action}
 
 
+def _run(cmd, input_bytes=None):
+    """Run a child process, return its stdout bytes. Raises on non-zero exit."""
+    proc = subprocess.run(
+        cmd,
+        input=input_bytes,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+    )
+    return proc.stdout
+
+
+def _wav_to_ogg(wav_bytes):
+    """Encode WAV/PCM bytes to mono Ogg Vorbis (Luanti only plays Ogg, and only
+    mono sounds play positionally). Prefers the `soundfile` library; falls back to
+    ffmpeg if it isn't installed."""
+    try:
+        import soundfile as sf  # bundled libsndfile, no system binary needed
+        data, sr = sf.read(io.BytesIO(wav_bytes), always_2d=True)
+        mono = data.mean(axis=1)  # downmix -> mono so it plays from the villager
+        buf = io.BytesIO()
+        sf.write(buf, mono, sr, format="OGG", subtype="VORBIS")
+        return buf.getvalue()
+    except ImportError:
+        return _run(
+            [FFMPEG_BIN, "-hide_banner", "-loglevel", "error",
+             "-f", "wav", "-i", "pipe:0", "-ac", "1", "-c:a", "libvorbis", "-f", "ogg", "pipe:1"],
+            wav_bytes,
+        )
+
+
+def _sapi_wav(text, villager):
+    """Synthesize `text` to WAV bytes using the Windows built-in voices (SAPI).
+    Rate is nudged per villager so they don't all sound identical."""
+    seed = _seed(str(villager.get("id") or villager.get("name") or ""))
+    rate = (seed % 7) - 3  # -3..3, SAPI's speaking-rate range is -10..10
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
+        wav_path = tf.name
+    try:
+        # Pick one of the installed voices deterministically per villager so
+        # different villagers sound different (e.g. British vs American).
+        script = (
+            "Add-Type -AssemblyName System.Speech;"
+            "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer;"
+            "$v = @($s.GetInstalledVoices() | Where-Object { $_.Enabled });"
+            "if ($v.Count -gt 0) {"
+            " $s.SelectVoice($v[[int]$env:TC_VOICE_IDX % $v.Count].VoiceInfo.Name) };"
+            f"$s.Rate = {rate};"
+            "$s.SetOutputToWaveFile($env:TC_WAV);"
+            "$s.Speak([Console]::In.ReadToEnd());"
+            "$s.Dispose()"
+        )
+        env = dict(os.environ, TC_WAV=wav_path, TC_VOICE_IDX=str(seed))
+        subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+            input=text.encode("utf-8"),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, env=env,
+        )
+        with open(wav_path, "rb") as fh:
+            return fh.read()
+    finally:
+        try:
+            os.remove(wav_path)
+        except OSError:
+            pass
+
+
+def _villager_gender(villager):
+    """A villager has no real gender, so derive one: by name when recognizable,
+    otherwise a stable coin-flip on the id."""
+    name = str(villager.get("name") or "").strip().lower()
+    if name in NAME_GENDER:
+        return NAME_GENDER[name]
+    return "male" if _seed(str(villager.get("id") or name)) % 2 == 0 else "female"
+
+
+def _pick_piper_voice(villager):
+    """Pick a Piper model path: a voice of the villager's gender, chosen stably by
+    id so each villager always sounds the same (and picks up that voice's accent)."""
+    if not PIPER_VOICE_DIR:
+        return None
+
+    def available(stems):
+        return [s for s in stems
+                if os.path.exists(os.path.join(PIPER_VOICE_DIR, s + ".onnx"))]
+
+    gender = _villager_gender(villager)
+    pool = available([s for (s, g, _a) in PIPER_VOICE_REGISTRY if g == gender])
+    if not pool:  # no voice of that gender downloaded -> any voice we have
+        pool = available([s for (s, _g, _a) in PIPER_VOICE_REGISTRY])
+    if not pool:
+        return None
+    key = str(villager.get("id") or villager.get("name") or "")
+    return os.path.join(PIPER_VOICE_DIR, pool[_seed(key) % len(pool)] + ".onnx")
+
+
+def synth_ogg(text, villager):
+    """Synthesize `text` to Ogg Vorbis bytes for the given villager, or None."""
+    text = (text or "").strip()
+    if not text:
+        return None
+    try:
+        if TTS_ENGINE == "test":
+            if TTS_TEST_OGG and os.path.exists(TTS_TEST_OGG):
+                with open(TTS_TEST_OGG, "rb") as fh:
+                    return fh.read()
+            return None
+        if TTS_ENGINE == "sapi":
+            return _wav_to_ogg(_sapi_wav(text, villager))
+        if TTS_ENGINE == "piper":
+            model = _pick_piper_voice(villager)
+            if not model:
+                return None
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
+                wav_path = tf.name
+            try:
+                _run([PIPER_BIN, "--model", model, "--output_file", wav_path],
+                     text.encode("utf-8"))
+                with open(wav_path, "rb") as fh:
+                    wav = fh.read()
+            finally:
+                try:
+                    os.remove(wav_path)
+                except OSError:
+                    pass
+            return _wav_to_ogg(wav)
+        if TTS_ENGINE == "espeak":
+            wav = _run([ESPEAK_BIN, "--stdout", text])
+            return _wav_to_ogg(wav)
+    except Exception as exc:  # noqa: BLE001 - TTS must never break the chat reply
+        sys.stderr.write(f"[bridge] tts failed: {exc}\n")
+    return None
+
+
+def add_audio(response, payload):
+    """Attach base64 Ogg audio to the response when TTS is enabled (best-effort)."""
+    if not TTS_ENABLED or TTS_ENGINE in ("", "none"):
+        return
+    ogg = synth_ogg(response.get("speech"), payload.get("villager") or {})
+    if ogg:
+        response["audio_b64"] = base64.b64encode(ogg).decode("ascii")
+        response["audio_format"] = "ogg"
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "TheocraftOllamaBridge/1.0"
 
@@ -354,7 +546,9 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:  # noqa: BLE001 - report anything else as a gateway error
             return self._send_json(502, {"error": f"gateway error: {exc}"})
 
-        self._send_json(200, to_theocraft_response(content))
+        response = to_theocraft_response(content)
+        add_audio(response, payload)
+        self._send_json(200, response)
 
     def log_message(self, fmt, *args):
         sys.stderr.write("[bridge] " + (fmt % args) + "\n")

@@ -96,6 +96,11 @@ function mod.ask_villager(self, player, message, callback)
 		if not response then
 			return fallback(self, player_name, message, identity, history, callback, parse_error or validation_error, limits)
 		end
+		-- Carry the optional TTS clip (base64 Ogg Vorbis) straight through; the
+		-- game validates/plays it. History only stores the text.
+		if type(decoded) == "table" and type(decoded.audio_b64) == "string" then
+			response.audio_b64 = decoded.audio_b64
+		end
 		add_history(self, player_name, history, "villager", response.speech, limits)
 		callback(response, "remote")
 	end)
