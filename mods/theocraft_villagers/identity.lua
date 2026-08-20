@@ -62,6 +62,12 @@ function mod.ensure_identity(self)
 		self._theocraft_bio = string.format(template, profession)
 	end
 
+	-- A human-friendly "birthday" (DDMMYY) stamped once, so villagers that share a
+	-- name can still be told apart and targeted precisely by /tcfind and /tcrevive.
+	if not self._theocraft_born or self._theocraft_born == "" then
+		self._theocraft_born = os.date("%d%m%y")
+	end
+
 	self._theocraft_name = short(self._theocraft_name, 40)
 	self._theocraft_bio = short(self._theocraft_bio, 180)
 	if self.nametag ~= self._theocraft_name then

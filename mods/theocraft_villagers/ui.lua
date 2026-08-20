@@ -78,7 +78,8 @@ function mod.show_conversation(player_name, status)
 		-- to white, which is invisible on VoxeLibre's light form background, so
 		-- force a dark colour for the read-only history.
 		"style_type[textarea;border=false;textcolor=#222222]",
-		"label[0.25,0.3;", minetest.formspec_escape(self._theocraft_name), "]",
+		"label[0.25,0.3;", minetest.formspec_escape(self._theocraft_name ..
+			(self._theocraft_born and ("   \194\183 born " .. self._theocraft_born) or "")), "]",
 		"scrollbaroptions[max=1000;thumbsize=120]",
 		"scroll_container[0.25,0.55;8.05,", tostring(hist_h), ";histbar;vertical;",
 			tostring(scroll_factor), "]",

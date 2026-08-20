@@ -42,6 +42,7 @@ local function scan_active()
 				mod.locations[entity._id] = {
 					name = entity._theocraft_name,
 					bio = entity._theocraft_bio,   -- kept so a lost villager can be revived exactly
+					born = entity._theocraft_born, -- DDMMYY, to tell same-named villagers apart
 					x = math.floor(pos.x + 0.5),
 					y = math.floor(pos.y + 0.5),
 					z = math.floor(pos.z + 0.5),
@@ -83,35 +84,59 @@ local function place_waypoint(player, name, pos)
 	end)
 end
 
+-- Parse "<name> [DDMMYY]" -> name, optional birthday (or nil).
+local function parse_target(param)
+	local tokens = {}
+	for w in (param or ""):gmatch("%S+") do tokens[#tokens + 1] = w end
+	local born = tokens[2] and tokens[2]:match("^%d%d%d%d%d%d$") or nil
+	return tokens[1], born
+end
+
+local function born_tag(born)
+	return born and (" (born " .. born .. ")") or ""
+end
+
 minetest.register_chatcommand("tcfind", {
-	params = "<name>",
-	description = "Locate a villager by name (nearest last-known spot + a waypoint beacon)",
+	params = "<name> [DDMMYY]",
+	description = "Locate a villager by name; add their birthday DDMMYY to pick a specific one",
 	func = function(player_name, param)
 		local player = minetest.get_player_by_name(player_name)
 		if not player then return false, "No player." end
-		local target = (param or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
-		if target == "" then return false, "Usage: /tcfind <name>" end
+		local name, born = parse_target(param)
+		if not name then return false, "Usage: /tcfind <name> [DDMMYY]" end
+		local target = name:lower()
 
 		scan_active()  -- freshest data for anyone loaded right now
 
 		local ppos = player:get_pos()
 		local matches = {}
 		for _, e in pairs(mod.locations) do
-			if e.name and e.name:lower() == target then
+			if e.name and e.name:lower() == target and (not born or e.born == born) then
 				local pos = {x = e.x, y = e.y, z = e.z}
-				matches[#matches + 1] = {pos = pos, d = vector.distance(ppos, pos), name = e.name}
+				matches[#matches + 1] = {pos = pos, d = vector.distance(ppos, pos), name = e.name, born = e.born}
 			end
 		end
 		if #matches == 0 then
-			return false, "No villager named '" .. param ..
-				"' on record yet. Walk near them once so the game learns where they are."
+			return false, "No villager named '" .. name .. "'" .. born_tag(born) ..
+				" on record yet. Walk near them once so the game learns where they are."
 		end
 		table.sort(matches, function(a, b) return a.d < b.d end)
+
+		-- Several share the name and no birthday was given: list them so the player
+		-- can pick one.
+		if #matches > 1 and not born then
+			local lines = {"Several villagers named " .. matches[1].name .. " — add a birthday to pick one:"}
+			for _, m in ipairs(matches) do
+				lines[#lines + 1] = string.format("  born %s at %d, %d, %d (%d away) -> /tcfind %s %s",
+					m.born or "??????", m.pos.x, m.pos.y, m.pos.z, math.floor(m.d), matches[1].name, m.born or "??????")
+			end
+			return true, table.concat(lines, "\n")
+		end
+
 		local m = matches[1]
 		place_waypoint(player, m.name, m.pos)
-		local extra = #matches > 1 and (" (" .. #matches .. " share that name; nearest shown)") or ""
-		return true, string.format("%s is at %d, %d, %d — %d blocks away. Follow the gold beacon.%s",
-			m.name, m.pos.x, m.pos.y, m.pos.z, math.floor(m.d), extra)
+		return true, string.format("%s%s is at %d, %d, %d — %d blocks away. Follow the gold beacon.",
+			m.name, born_tag(m.born), m.pos.x, m.pos.y, m.pos.z, math.floor(m.d))
 	end,
 })
 
@@ -171,7 +196,19 @@ local function is_active(id)
 	return false
 end
 
-local function spawn_villager(player, id, name, bio)
+-- Is a villager with this name (and optional birthday) already loaded nearby?
+local function active_match(name, born)
+	for _, e in pairs(minetest.luaentities) do
+		if e.name == "mobs_mc:villager" and e._theocraft_name
+			and e._theocraft_name:lower() == name:lower()
+			and (not born or e._theocraft_born == born) then
+			return true
+		end
+	end
+	return false
+end
+
+local function spawn_villager(player, id, name, bio, born)
 	local pos = player:get_pos()
 	if not pos then return nil end
 	local obj = minetest.add_entity(pos, "mobs_mc:villager")
@@ -180,35 +217,56 @@ local function spawn_villager(player, id, name, bio)
 	ent._id = id                       -- set before identity/history are resolved
 	ent._theocraft_name = name
 	if bio and bio ~= "" then ent._theocraft_bio = bio end
-	mod.ensure_identity(ent)           -- refreshes the floating nametag, keeps our id/name
+	if born and born ~= "" then ent._theocraft_born = born end
+	mod.ensure_identity(ent)           -- refreshes the nametag, fills in any blanks
 	return ent
 end
 
 minetest.register_chatcommand("tcrevive", {
-	params = "<name>",
-	description = "Summon a villager by name, restoring their saved chat memory when possible",
+	params = "<name> [DDMMYY]",
+	description = "Summon a villager by name (add their birthday DDMMYY to pick a specific one), restoring saved chat memory when possible",
 	privs = {server = true},
 	func = function(player_name, param)
 		local player = minetest.get_player_by_name(player_name)
 		if not player then return false, "No player." end
-		local name = (param or ""):gsub("^%s+", ""):gsub("%s+$", "")
-		if name == "" then return false, "Usage: /tcrevive <name>" end
+		local name, born = parse_target(param)
+		if not name then return false, "Usage: /tcrevive <name> [DDMMYY]" end
 
-		-- 1) Exact restore when we know this villager's id and she isn't already here.
+		-- Don't duplicate a villager who is already standing here.
+		if active_match(name, born) then
+			return false, name .. born_tag(born) ..
+				" is already here. Use /tcfind " .. name .. " to locate her."
+		end
+
+		-- 1) Exact restore when we know this villager's id. Collect roster matches so
+		-- a birthday can disambiguate two same-named villagers.
+		local candidates = {}
 		for id, e in pairs(mod.locations) do
-			if e.name and e.name:lower() == name:lower() and not is_active(id) then
-				if spawn_villager(player, id, e.name, e.bio) then
-					return true, e.name ..
-						" is back exactly as before — same voice, personality and memory."
-				end
-				return false, "Could not spawn the villager."
+			if e.name and e.name:lower() == name:lower()
+				and (not born or e.born == born) and not is_active(id) then
+				candidates[#candidates + 1] = {id = id, e = e}
 			end
+		end
+		if #candidates > 1 and not born then
+			local lines = {"Several villagers named " .. name .. " — add a birthday to pick one:"}
+			for _, c in ipairs(candidates) do
+				lines[#lines + 1] = "  /tcrevive " .. name .. " " .. (c.e.born or "??????")
+			end
+			return true, table.concat(lines, "\n")
+		end
+		if #candidates >= 1 then
+			local c = candidates[1]
+			if spawn_villager(player, c.id, c.e.name, c.e.bio, c.e.born) then
+				return true, c.e.name .. born_tag(c.e.born) ..
+					" is back exactly as before — same voice, personality and memory."
+			end
+			return false, "Could not spawn the villager."
 		end
 
 		-- 2) Otherwise graft the best saved conversation onto a fresh villager.
 		local blob = find_saved_history(name)
 		local id = mcl_util.gen_uuid()
-		if not spawn_villager(player, id, name, nil) then
+		if not spawn_villager(player, id, name, nil, os.date("%d%m%y")) then
 			return false, "Could not spawn the villager."
 		end
 		if blob then
