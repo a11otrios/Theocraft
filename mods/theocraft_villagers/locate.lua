@@ -41,6 +41,7 @@ local function scan_active()
 			if pos then
 				mod.locations[entity._id] = {
 					name = entity._theocraft_name,
+					bio = entity._theocraft_bio,   -- kept so a lost villager can be revived exactly
 					x = math.floor(pos.x + 0.5),
 					y = math.floor(pos.y + 0.5),
 					z = math.floor(pos.z + 0.5),
@@ -111,5 +112,111 @@ minetest.register_chatcommand("tcfind", {
 		local extra = #matches > 1 and (" (" .. #matches .. " share that name; nearest shown)") or ""
 		return true, string.format("%s is at %d, %d, %d — %d blocks away. Follow the gold beacon.%s",
 			m.name, m.pos.x, m.pos.y, m.pos.z, math.floor(m.d), extra)
+	end,
+})
+
+-- ---------------------------------------------------------------------------
+-- Revival: bring back a lost villager, with her saved chat memory.
+--
+-- A villager's whole self (name, bio, personality, voice, history) is tied to a
+-- persistent id. If we know that id (villager met since roster tracking) we can
+-- respawn her *exactly*, and her history reconnects automatically because it is
+-- keyed by id. For older villagers whose id was never recorded, we instead find
+-- the best-matching saved conversation by name and graft it onto a fresh villager
+-- (memory + name restored; personality/voice are new).
+
+local function history_key_for(id, player_name)
+	return "history:" .. minetest.sha1((id or "unknown") .. "\0" .. player_name)
+end
+
+-- How many times the player addressed `name` in a saved conversation.
+local function name_mentions(history, name)
+	local needle, score = name:lower(), 0
+	for _, e in ipairs(history) do
+		if e.role == "player" and type(e.content) == "string" then
+			local from = 1
+			local text = e.content:lower()
+			while true do
+				local s = text:find(needle, from, true)
+				if not s then break end
+				score = score + 1
+				from = s + #needle
+			end
+		end
+	end
+	return score
+end
+
+-- Best-matching saved conversation for a villager name (or nil).
+local function find_saved_history(name)
+	local all = mod.storage:to_table()
+	local fields = all and all.fields or {}
+	local best_v, best_s
+	for k, v in pairs(fields) do
+		if k:sub(1, 8) == "history:" then
+			local decoded = minetest.parse_json(v)
+			if type(decoded) == "table" then
+				local s = name_mentions(decoded, name)
+				if s > 0 and (not best_s or s > best_s) then best_s, best_v = s, v end
+			end
+		end
+	end
+	return best_v
+end
+
+local function is_active(id)
+	for _, e in pairs(minetest.luaentities) do
+		if e.name == "mobs_mc:villager" and e._id == id then return true end
+	end
+	return false
+end
+
+local function spawn_villager(player, id, name, bio)
+	local pos = player:get_pos()
+	if not pos then return nil end
+	local obj = minetest.add_entity(pos, "mobs_mc:villager")
+	local ent = obj and obj:get_luaentity()
+	if not ent then return nil end
+	ent._id = id                       -- set before identity/history are resolved
+	ent._theocraft_name = name
+	if bio and bio ~= "" then ent._theocraft_bio = bio end
+	mod.ensure_identity(ent)           -- refreshes the floating nametag, keeps our id/name
+	return ent
+end
+
+minetest.register_chatcommand("tcrevive", {
+	params = "<name>",
+	description = "Summon a villager by name, restoring their saved chat memory when possible",
+	privs = {server = true},
+	func = function(player_name, param)
+		local player = minetest.get_player_by_name(player_name)
+		if not player then return false, "No player." end
+		local name = (param or ""):gsub("^%s+", ""):gsub("%s+$", "")
+		if name == "" then return false, "Usage: /tcrevive <name>" end
+
+		-- 1) Exact restore when we know this villager's id and she isn't already here.
+		for id, e in pairs(mod.locations) do
+			if e.name and e.name:lower() == name:lower() and not is_active(id) then
+				if spawn_villager(player, id, e.name, e.bio) then
+					return true, e.name ..
+						" is back exactly as before — same voice, personality and memory."
+				end
+				return false, "Could not spawn the villager."
+			end
+		end
+
+		-- 2) Otherwise graft the best saved conversation onto a fresh villager.
+		local blob = find_saved_history(name)
+		local id = mcl_util.gen_uuid()
+		if not spawn_villager(player, id, name, nil) then
+			return false, "Could not spawn the villager."
+		end
+		if blob then
+			mod.storage:set_string(history_key_for(id, player_name), blob)
+			return true, name .. " is back and remembers your past chats. " ..
+				"(Her voice and personality are new — the originals weren't recorded before today.)"
+		end
+		return true, "Summoned a new villager named " .. name ..
+			", but found no saved chat to restore."
 	end,
 })
