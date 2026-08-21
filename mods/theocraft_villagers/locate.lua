@@ -35,6 +35,7 @@ end
 -- Update the registry from every currently-active villager.
 local function scan_active()
 	local changed = false
+	local sx, sy, sz, count = 0, 0, 0, 0
 	for _, entity in pairs(minetest.luaentities) do
 		if entity.name == "mobs_mc:villager" and entity._id and entity._theocraft_name then
 			local pos = entity.object and entity.object:get_pos()
@@ -47,11 +48,16 @@ local function scan_active()
 					y = math.floor(pos.y + 0.5),
 					z = math.floor(pos.z + 0.5),
 				}
+				sx, sy, sz, count = sx + pos.x, sy + pos.y, sz + pos.z, count + 1
 				changed = true
 			end
 		end
 	end
 	if changed then save_locations() end
+	-- Keep the auto-placed village landmark centred on the villagers.
+	if count > 0 and mod.recenter_village then
+		mod.recenter_village({x = sx / count, y = sy / count, z = sz / count})
+	end
 end
 
 local accum = 0
@@ -62,7 +68,8 @@ minetest.register_globalstep(function(dtime)
 	scan_active()
 end)
 
-local function place_waypoint(player, name, pos)
+-- Shared by /tcfind and /tcmarks (landmarks.lua): one gold beacon per player.
+function mod.place_waypoint(player, name, pos)
 	local player_name = player:get_player_name()
 	if mod.waypoints[player_name] then
 		player:hud_remove(mod.waypoints[player_name])
@@ -134,7 +141,7 @@ minetest.register_chatcommand("tcfind", {
 		end
 
 		local m = matches[1]
-		place_waypoint(player, m.name, m.pos)
+		mod.place_waypoint(player, m.name, m.pos)
 		return true, string.format("%s%s is at %d, %d, %d — %d blocks away. Follow the gold beacon.",
 			m.name, born_tag(m.born), m.pos.x, m.pos.y, m.pos.z, math.floor(m.d))
 	end,

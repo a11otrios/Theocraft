@@ -20,6 +20,7 @@ end
 
 load("identity")
 load("policy")
+load("landmarks")
 load("actions")
 load("llm")
 load("speech")

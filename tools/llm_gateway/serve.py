@@ -134,6 +134,30 @@ def describe_actions(allowed_actions):
         elif atype == "build":
             blueprints = ", ".join(str(b) for b in entry.get("blueprints", []))
             lines.append(f'- build: construct something. Include "blueprint" (one of: {blueprints}).')
+        elif atype == "goto":
+            landmarks = ", ".join(str(l) for l in entry.get("landmarks", []))
+            lines.append(
+                f'- goto: walk to a named landmark and wait there. '
+                f'Include "landmark" (one of: {landmarks}).'
+            )
+        elif atype == "guard":
+            landmarks = ", ".join(str(l) for l in entry.get("landmarks", []))
+            lines.append(
+                f'- guard: stand watch at a spot. Optionally include "landmark" '
+                f'(one of: {landmarks}); omit it to guard where you are.'
+            )
+        elif atype == "patrol":
+            landmarks = ", ".join(str(l) for l in entry.get("landmarks", []))
+            lines.append(
+                f'- patrol: walk a loop between landmarks. '
+                f'Include "landmarks", a list of 2+ from: {landmarks}.'
+            )
+        elif atype == "deliver":
+            destinations = ", ".join(str(d) for d in entry.get("destinations", []))
+            lines.append(
+                f'- deliver: carry what you have gathered to a destination. '
+                f'Include "destination" (one of: {destinations}).'
+            )
     return "\n".join(lines)
 
 
@@ -234,7 +258,10 @@ def build_system_prompt(payload):
     return "\n\n".join(parts)
 
 
-KNOWN_ACTION_TYPES = ["none", "follow", "stay", "come", "gather", "build"]
+KNOWN_ACTION_TYPES = [
+    "none", "follow", "stay", "come", "gather", "build",
+    "goto", "guard", "patrol", "deliver",
+]
 
 
 def build_format(payload):
@@ -267,6 +294,49 @@ def build_format(payload):
                     "blueprint": {"type": "string", "enum": blueprints},
                 },
                 "required": ["type", "blueprint"],
+            })
+        elif atype == "goto":
+            landmarks = [str(l) for l in entry.get("landmarks", [])]
+            prop = {"type": "string"}
+            if landmarks:
+                prop["enum"] = landmarks
+            variants.append({
+                "type": "object",
+                "properties": {"type": {"const": "goto"}, "landmark": prop},
+                "required": ["type", "landmark"],
+            })
+        elif atype == "guard":
+            landmarks = [str(l) for l in entry.get("landmarks", [])]
+            prop = {"type": "string"}
+            if landmarks:
+                prop["enum"] = landmarks
+            variants.append({
+                "type": "object",
+                "properties": {"type": {"const": "guard"}, "landmark": prop},
+                "required": ["type"],  # landmark optional: omit to guard the current spot
+            })
+        elif atype == "patrol":
+            landmarks = [str(l) for l in entry.get("landmarks", [])]
+            item = {"type": "string"}
+            if landmarks:
+                item["enum"] = landmarks
+            variants.append({
+                "type": "object",
+                "properties": {
+                    "type": {"const": "patrol"},
+                    "landmarks": {"type": "array", "items": item, "minItems": 2},
+                },
+                "required": ["type", "landmarks"],
+            })
+        elif atype == "deliver":
+            destinations = [str(d) for d in entry.get("destinations", [])] or ["player"]
+            variants.append({
+                "type": "object",
+                "properties": {
+                    "type": {"const": "deliver"},
+                    "destination": {"type": "string", "enum": destinations},
+                },
+                "required": ["type", "destination"],
             })
         else:  # none, follow, stay, come
             variants.append({

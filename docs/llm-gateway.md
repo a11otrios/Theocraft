@@ -48,4 +48,11 @@ valid response.
 
 The gateway may only select actions advertised in `allowed_actions`. The game still validates every response, clamps counts, limits action range, checks protected areas, and rejects arbitrary node or command execution. Invalid, unavailable, or slow gateways automatically fall back to the offline instruction interpreter.
 
-Supported actions in the first milestone are `none`, `follow`, `stay`, `come`, `gather`, and `build`. Gather resources and build blueprints are constrained to the values included in each request.
+Supported actions are `none`, `follow`, `stay`, `come`, `gather`, `build`, `goto`, `guard`, `patrol`, and `deliver`. Gather resources and build blueprints are constrained to the values included in each request.
+
+The landmark-based actions are only advertised in `allowed_actions` when the world has landmarks (players name spots with `/tcmark`), and their targets are constrained to the landmark names in the request:
+
+- `goto` — walk to a named landmark and wait. Include `"landmark"`.
+- `guard` — stand watch. Optionally include `"landmark"`; omit it to guard the current spot.
+- `patrol` — loop between landmarks. Include `"landmarks"`, a list of 2+ names.
+- `deliver` — carry gathered items to a `"destination"`, which is `"player"` or a landmark name.

@@ -28,6 +28,7 @@ end
 
 definition.do_custom = function(self, dtime)
 	mod.ensure_identity(self)
-	if mod.tick_action(self) then return end
+	if mod.tick_action(self) then return end   -- an explicit command owns this tick
+	mod.tick_idle(self)                          -- may start an occasional stroll home
 	if original_do_custom then return original_do_custom(self, dtime) end
 end
