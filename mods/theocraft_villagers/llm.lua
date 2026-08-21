@@ -9,6 +9,19 @@ local function setting(name, default)
 	return value
 end
 
+-- Always appended to whatever system prompt the player configured, so villagers
+-- know the rules of hide and seek without the player re-explaining them each time.
+-- The player only has to mention the game (e.g. "let's play hide and seek").
+local HIDE_AND_SEEK_RULES = table.concat({
+	"You can play hide and seek with the player.",
+	"When they ask to play and you are the one hiding, pick a spot far from them",
+	"(use a 'goto' or 'guard' action toward a landmark away from the player if you",
+	"know one), stay put, and stop talking so they cannot find you by your voice.",
+	"When you are seeking, walk toward the player ('come' or 'follow') and cheerfully",
+	"announce it when you get close to them - that means you found them.",
+	"Keep it playful and in character.",
+}, " ")
+
 local function history_key(self, player_name)
 	return "history:" .. minetest.sha1((self._id or "unknown") .. "\0" .. player_name)
 end
@@ -74,7 +87,7 @@ function mod.ask_villager(self, player, message, callback)
 		allowed_actions = mod.allowed_actions(limits),
 		model = setting("theocraft_llm_model", ""),
 		system_prompt = setting("theocraft_llm_system_prompt",
-			"Be concise, friendly, and stay in character."),
+			"Be concise, friendly, and stay in character.") .. " " .. HIDE_AND_SEEK_RULES,
 	})
 	if not body then return fallback(self, player_name, message, identity, history, callback, json_error, limits) end
 
