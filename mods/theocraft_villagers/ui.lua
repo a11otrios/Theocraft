@@ -160,10 +160,14 @@ local function send_message(player, self, fields)
 	mod.show_conversation(player_name, self._theocraft_name .. " is thinking...")
 	mod.ask_villager(self, player, message, function(response, source, warning)
 		mod.pending[player_name] = nil
+		-- Let the villager speak aloud the moment her reply lands, even if the
+		-- player has since closed the chat box. This uses the villager we messaged
+		-- and the stored player name, so it doesn't depend on an open session; the
+		-- visual reply below still requires the box to be open.
+		mod.villager_say(self, player_name, response.speech, response.audio_b64)
 		local current = session_entity(player_name)
 		local current_player = minetest.get_player_by_name(player_name)
 		if not current or not current_player then return end
-		mod.villager_say(current, current_player, response.speech, response.audio_b64)
 		local result = mod.apply_action(current, current_player, response.action)
 		local status = source == "remote" and "Remote LLM" or "Offline interpreter"
 		if warning then status = status .. " (" .. mod.clean_text(warning, 100) .. ")" end
