@@ -646,6 +646,21 @@ function mod.apply_action(self, player, action)
 			type = "deliver", player = player_name, pos = pos, landmark = label, to_player = to_player, next_at = 0,
 		}
 		stop(self)
+	elseif action.type == "teleport" then
+		local target, where
+		if action.landmark then
+			local lm = mod.get_landmark(action.landmark)
+			if not lm or not lm.x then return {ok = false, message = "I don't know where that is."} end
+			target, where = {x = lm.x, y = lm.y, z = lm.z}, lm.name
+		else
+			local pos = player:get_pos()
+			target = {x = pos.x + 1, y = pos.y, z = pos.z}   -- beside the player, not on their head
+			where = "you"
+		end
+		stop(self)
+		self.object:set_pos(target)
+		self._theocraft_instruction = {type = "stay", player = player_name}   -- hold still after blinking
+		return {ok = true, message = "Blinked over to " .. where .. "."}
 	end
 	return {ok = true}
 end

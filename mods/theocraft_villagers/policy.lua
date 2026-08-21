@@ -149,6 +149,16 @@ function mod.normalise_action(raw, limits)
 		local lm = mod.get_landmark(dest)
 		if lm and lm.x then return {type = "deliver", landmark = lm.name} end
 		return {type = "deliver", destination = "player"}   -- unknown place: default to the player
+	elseif action_type == "teleport" or action_type == "tp" or action_type == "blink" or action_type == "warp" then
+		local dest = args.destination or args.landmark or args.target or args.to or args.place
+		dest = type(dest) == "string" and clean_text(dest, 40) or ""
+		local low = dest:lower()
+		if dest == "" or low == "player" or low == "me" or low == "you" then
+			return {type = "teleport", destination = "player"}
+		end
+		local lm = mod.get_landmark(dest)
+		if lm and lm.x then return {type = "teleport", landmark = lm.name} end
+		return {type = "teleport", destination = "player"}   -- unknown place: default to the player
 	end
 	return {type = "none"}
 end
@@ -188,6 +198,7 @@ function mod.allowed_actions(limits)
 	local destinations = {"player"}
 	for _, n in ipairs(names) do destinations[#destinations + 1] = n end
 	actions[#actions + 1] = {type = "deliver", destinations = destinations}
+	actions[#actions + 1] = {type = "teleport", destinations = destinations}
 	return actions
 end
 
@@ -240,6 +251,13 @@ function mod.offline_response(message, identity, limits)
 				action = mod.normalise_action({type = "deliver", landmark = lm}, limits)}
 		end
 		return {speech = "I'll bring these to you.", action = {type = "deliver", destination = "player"}}
+	elseif contains(text, "teleport") or contains(text, "blink") or contains(text, "warp") then
+		local lm = find_landmark_in_text(text)
+		if lm and not (contains(text, "me") or contains(text, "here")) then
+			return {speech = "Blinking over to " .. lm .. ".",
+				action = mod.normalise_action({type = "teleport", landmark = lm}, limits)}
+		end
+		return {speech = "Blinking to you.", action = {type = "teleport", destination = "player"}}
 	elseif contains(text, "come") then
 		return {speech = "Coming over now.", action = {type = "come"}}
 	elseif (contains(text, "go") or contains(text, "goto") or contains(text, "head") or contains(text, "walk")) and find_landmark_in_text(text) then
