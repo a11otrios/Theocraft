@@ -220,6 +220,60 @@ minetest.register_chatcommand("tcsethome", {
 	end,
 })
 
+minetest.register_chatcommand("tcteleport", {
+	params = "<villager> here | <landmark> | x y z",
+	description = "Teleport a loaded villager to you, a named landmark, or coordinates",
+	func = function(player_name, param)
+		local player = minetest.get_player_by_name(player_name)
+		if not player then return false, "No player." end
+		local villager_name, rest = (param or ""):match("^%s*(%S+)%s+(.-)%s*$")
+		if not villager_name or not rest or rest == "" then
+			return false, "Usage: /tcteleport <villager> here | <landmark> | x y z"
+		end
+
+		-- Nearest loaded villager with that name (same finder as /tcsethome).
+		local ppos = player:get_pos()
+		local best, best_d
+		for _, e in pairs(minetest.luaentities) do
+			if e.name == "mobs_mc:villager" and e._theocraft_name
+				and e._theocraft_name:lower() == villager_name:lower() then
+				local pos = e.object and e.object:get_pos()
+				if pos then
+					local d = vector.distance(ppos, pos)
+					if not best_d or d < best_d then best, best_d = e, d end
+				end
+			end
+		end
+		if not best then
+			return false, "No villager named '" .. villager_name ..
+				"' is loaded nearby. Walk up to them and try again."
+		end
+
+		-- Destination: "here"/me, a known landmark, or raw x y z coords. Landmark
+		-- and player targets reuse the teleport action so the villager ends up
+		-- placed and set to "stay" exactly like the in-chat command.
+		local low = rest:lower()
+		if low == "here" or low == "me" or low == "you" then
+			mod.apply_action(best, player, {type = "teleport", destination = "player"})
+			return true, best._theocraft_name .. " blinked over to you."
+		end
+		local lm = mod.get_landmark(rest)
+		if lm and lm.x then
+			mod.apply_action(best, player, {type = "teleport", landmark = lm.name})
+			return true, best._theocraft_name .. " blinked to " .. lm.name .. "."
+		end
+		local x, y, z = rest:match("^(-?%d+)%s+(-?%d+)%s+(-?%d+)$")
+		if x then
+			best.object:set_velocity(vector.zero())
+			best.object:set_pos({x = tonumber(x), y = tonumber(y), z = tonumber(z)})
+			best._theocraft_instruction = {type = "stay", player = player_name}
+			return true, string.format("%s blinked to %s, %s, %s.", best._theocraft_name, x, y, z)
+		end
+		return false, "No landmark named '" .. rest ..
+			"'. Use 'here', a landmark name, or x y z coordinates."
+	end,
+})
+
 minetest.register_chatcommand("tcunmark", {
 	params = "<name>",
 	description = "Remove a landmark",
