@@ -31,6 +31,26 @@ New-Item -ItemType Directory -Path $env:ANDROID_USER_HOME, $env:GRADLE_USER_HOME
 $sdkProperty = $androidSdkPath.Replace("\", "/")
 Set-Content -LiteralPath (Join-Path $androidRoot "local.properties") -Value "sdk.dir=$sdkProperty" -Encoding ASCII
 
+# Bump the Android build number on every build so each APK gets a new versionCode.
+# The launcher (MainActivity.checkAppVersion) only re-unpacks the bundled game
+# files when the versionCode changes; re-unpacking preserves worlds. Without this,
+# our static version made reinstalls look identical, so a phone kept running the
+# OLD unpacked mods and new /commands appeared as "invalid command".
+$buildNumberFile = Join-Path $repositoryRoot ".tools\android\build-number.txt"
+$buildNumber = 0
+if (Test-Path -LiteralPath $buildNumberFile) {
+	[int]::TryParse((Get-Content -LiteralPath $buildNumberFile -Raw).Trim(), [ref]$buildNumber) | Out-Null
+}
+$buildNumber = $buildNumber + 1
+Set-Content -LiteralPath $buildNumberFile -Value $buildNumber -Encoding ASCII
+$topGradle = Join-Path $androidRoot "build.gradle"
+$gradleText = Get-Content -LiteralPath $topGradle -Raw
+$gradleText = $gradleText -replace 'versionBuild",\s*\d+', "versionBuild"", $buildNumber"
+# UTF-8 WITHOUT a BOM: Set-Content -Encoding UTF8 on PS 5.1 prepends a BOM that
+# Gradle rejects ("Unexpected character '?'" on line 1).
+[System.IO.File]::WriteAllText($topGradle, $gradleText, (New-Object System.Text.UTF8Encoding($false)))
+Write-Output "Android build number: $buildNumber (new versionCode -> phone re-unpacks on next launch, keeping worlds)"
+
 $task = if ($Configuration -eq "Release") { "assembleRelease" } else { "assembleDebug" }
 $gradleWrapper = Join-Path $androidRoot "gradle\wrapper\gradle-wrapper.jar"
 $java = Join-Path $javaHomePath "bin\java.exe"
