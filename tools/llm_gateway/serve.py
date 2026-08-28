@@ -43,6 +43,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -70,7 +71,7 @@ MAX_BODY_BYTES = 256 * 1024
 # out of the villager. Any failure just omits the audio so chat is never broken.
 #
 # * ``TTS_ENABLED``  turn the whole feature on (default off)
-# * ``TTS_ENGINE``   piper | espeak | test | none  (default piper)
+# * ``TTS_ENGINE``   chatterbox | piper | espeak | sapi | test | none  (default piper)
 # * ``TTS_TEST_OGG`` engine=test: path to a fixed .ogg returned for every reply
 #                    (used to prove client playback before installing a real TTS)
 # * ``PIPER_BIN``    piper executable (default "piper")
@@ -107,6 +108,35 @@ NAME_GENDER = {
 }
 ESPEAK_BIN = os.environ.get("ESPEAK_BIN", "espeak-ng").strip()
 FFMPEG_BIN = os.environ.get("FFMPEG_BIN", "ffmpeg").strip()
+
+# Chatterbox (Resemble AI) — a neural TTS that sounds far more natural than
+# Piper/SAPI and can clone a voice from a short reference clip. Heavy: needs
+# torch + the model weights (downloaded once from HuggingFace). Runs on the GPU
+# when available (much faster) or CPU (works, but a few seconds per line).
+#
+# * ``CHATTERBOX_DEVICE``       cuda | cpu   (default: auto — cuda if available)
+# * ``CHATTERBOX_VOICE_DIR``    optional folder of reference voice clips (.wav/.mp3/
+#                               .flac). Name them starting "male" or "female" to
+#                               gender-tag them (e.g. male_ryan.wav); each villager
+#                               is matched to a clip of its gender, stable per id,
+#                               and its voice is cloned from that clip. With no dir,
+#                               all villagers share Chatterbox's built-in voice
+#                               (still varied a little per villager via exaggeration).
+# * ``CHATTERBOX_EXAGGERATION`` base emotion/intensity 0..1 (default 0.5)
+# * ``CHATTERBOX_CFG``          pacing/cfg_weight 0..1 (default 0.5; lower = slower)
+CHATTERBOX_DEVICE = os.environ.get("CHATTERBOX_DEVICE", "").strip().lower()
+CHATTERBOX_VOICE_DIR = os.environ.get("CHATTERBOX_VOICE_DIR", "").strip()
+
+
+def _env_float(name, default):
+    try:
+        return float(os.environ.get(name, "").strip() or default)
+    except ValueError:
+        return default
+
+
+CHATTERBOX_EXAGGERATION = _env_float("CHATTERBOX_EXAGGERATION", 0.5)
+CHATTERBOX_CFG = _env_float("CHATTERBOX_CFG", 0.5)
 
 
 def describe_actions(allowed_actions):
@@ -526,12 +556,75 @@ def _pick_piper_voice(villager):
     return os.path.join(PIPER_VOICE_DIR, pool[_seed(key) % len(pool)] + ".onnx")
 
 
+# --- Chatterbox neural TTS -------------------------------------------------
+# The model is expensive to load, so load it once and reuse it. Guard the load
+# with a lock so concurrent requests don't each build their own copy.
+_chatterbox_model = None
+_chatterbox_lock = threading.Lock()
+
+
+def _chatterbox_get_model():
+    """Lazily load the Chatterbox model (once), on GPU if available else CPU."""
+    global _chatterbox_model
+    if _chatterbox_model is not None:
+        return _chatterbox_model
+    with _chatterbox_lock:
+        if _chatterbox_model is None:
+            import torch  # noqa: PLC0415 - heavy import, only when this engine runs
+            from chatterbox.tts import ChatterboxTTS  # noqa: PLC0415
+            device = CHATTERBOX_DEVICE or ("cuda" if torch.cuda.is_available() else "cpu")
+            sys.stderr.write(f"[bridge] loading Chatterbox on {device} (first time is slow)...\n")
+            _chatterbox_model = ChatterboxTTS.from_pretrained(device=device)
+            sys.stderr.write("[bridge] Chatterbox ready.\n")
+    return _chatterbox_model
+
+
+def _pick_chatterbox_voice(villager):
+    """Pick a reference voice clip for this villager (a file in CHATTERBOX_VOICE_DIR
+    whose name starts with the villager's gender), stable per id. None -> use the
+    model's built-in voice."""
+    if not CHATTERBOX_VOICE_DIR or not os.path.isdir(CHATTERBOX_VOICE_DIR):
+        return None
+    exts = (".wav", ".mp3", ".flac", ".ogg")
+    clips = [f for f in sorted(os.listdir(CHATTERBOX_VOICE_DIR))
+             if f.lower().endswith(exts)]
+    if not clips:
+        return None
+    gender = _villager_gender(villager)
+    pool = [f for f in clips if f.lower().startswith(gender)] or clips
+    key = str(villager.get("id") or villager.get("name") or "")
+    return os.path.join(CHATTERBOX_VOICE_DIR, pool[_seed(key) % len(pool)])
+
+
+def _chatterbox_ogg(text, villager):
+    """Synthesize `text` with Chatterbox and return mono Ogg Vorbis bytes."""
+    import soundfile as sf  # noqa: PLC0415
+    model = _chatterbox_get_model()
+    # Nudge emotion a touch per villager so they don't all sound identical even
+    # when they share a reference voice (keep it within a sensible band).
+    seed = _seed(str(villager.get("id") or villager.get("name") or ""))
+    exaggeration = min(1.0, max(0.25, CHATTERBOX_EXAGGERATION + ((seed % 5) - 2) * 0.06))
+    ref = _pick_chatterbox_voice(villager)
+    kwargs = {"exaggeration": exaggeration, "cfg_weight": CHATTERBOX_CFG}
+    if ref:
+        kwargs["audio_prompt_path"] = ref
+    wav = model.generate(text, **kwargs)
+    # wav is a torch tensor shaped (1, N), float, at model.sr. Chatterbox output
+    # is already mono, so write Ogg directly.
+    audio = wav.squeeze(0).detach().cpu().numpy()
+    buf = io.BytesIO()
+    sf.write(buf, audio, model.sr, format="OGG", subtype="VORBIS")
+    return buf.getvalue()
+
+
 def synth_ogg(text, villager):
     """Synthesize `text` to Ogg Vorbis bytes for the given villager, or None."""
     text = (text or "").strip()
     if not text:
         return None
     try:
+        if TTS_ENGINE == "chatterbox":
+            return _chatterbox_ogg(text, villager)
         if TTS_ENGINE == "test":
             if TTS_TEST_OGG and os.path.exists(TTS_TEST_OGG):
                 with open(TTS_TEST_OGG, "rb") as fh:

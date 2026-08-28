@@ -117,6 +117,26 @@ auto-detects this layout; each villager is matched to a voice of its (name-deriv
 gender, chosen stably by id, so a villager always sounds the same. Add more
 `.onnx` voices and register them in `PIPER_VOICE_REGISTRY` in `serve.py`.
 
+**Chatterbox — neural voices, the best-sounding option.** [Chatterbox](https://github.com/resemble-ai/chatterbox)
+(Resemble AI) is an AI text-to-speech that sounds far more natural than Piper or
+SAPI, and can clone a voice from a short reference clip. It needs the pip package
+(pulls in `torch`) and works best on the GPU:
+
+```powershell
+python -m pip install chatterbox-tts
+.\scripts\Run-LlmGateway.ps1 -Voice chatterbox
+```
+
+The first reply is slow (the model loads once), then it's cached. On a GPU each
+line takes a second or two; on CPU it works but is several seconds per line.
+
+Per-villager voices (optional): drop a few short reference clips into
+`.tools\chatterbox\voices`, named starting `male` or `female`
+(e.g. `male_ryan.wav`, `female_amy.wav`). Each villager is matched to a clip of
+its (name-derived) gender, stable by id, and its voice is cloned from that clip.
+With no clips, all villagers share Chatterbox's built-in voice (still nudged a
+little per villager). Point at a different folder with `-VoiceDir <path>`.
+
 Disable voices entirely with `-Voice none`.
 
 ## Troubleshooting
@@ -173,6 +193,10 @@ All optional, via environment variables (the run script sets the common ones):
 | `OLLAMA_TEMPERATURE`       | `0.7`                    | Sampling temperature.                           |
 | `OLLAMA_TIMEOUT`           | `60`                     | Seconds to wait on Ollama.                      |
 | `TTS_ENABLED`              | *(unset)*                | Set to `1` to synthesize villager voices.       |
-| `TTS_ENGINE`               | `piper`                  | `piper`, `sapi` (Windows voices), or `none`.    |
+| `TTS_ENGINE`               | `piper`                  | `chatterbox`, `piper`, `sapi`, `espeak`, or `none`. |
 | `PIPER_BIN`                | `piper`                  | Path to `piper.exe`.                             |
 | `PIPER_VOICE_DIR`          | *(unset)*                | Folder holding the Piper `.onnx` voice models.  |
+| `CHATTERBOX_DEVICE`        | *(auto)*                 | `cuda` or `cpu`; auto-detects the GPU by default. |
+| `CHATTERBOX_VOICE_DIR`     | *(unset)*                | Folder of reference voice clips (gender-named).  |
+| `CHATTERBOX_EXAGGERATION`  | `0.5`                    | Base emotion/intensity, 0..1.                    |
+| `CHATTERBOX_CFG`           | `0.5`                    | Pacing / cfg_weight, 0..1 (lower = slower).      |

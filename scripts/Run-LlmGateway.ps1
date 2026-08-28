@@ -21,9 +21,14 @@ param(
     # (e.g. "llama-server process has terminated ... CUDA error").
     [switch]$CpuOnly,
     # Villager text-to-speech engine. "auto" uses Piper if it's installed under
-    # .tools\piper, otherwise the Windows built-in voices (SAPI); "none" disables.
-    [ValidateSet("auto", "piper", "sapi", "none")]
-    [string]$Voice = "auto"
+    # .tools\piper, otherwise the Windows built-in voices (SAPI); "chatterbox" is
+    # the neural voice (needs the chatterbox-tts pip package; GPU recommended);
+    # "none" disables.
+    [ValidateSet("auto", "chatterbox", "piper", "sapi", "none")]
+    [string]$Voice = "auto",
+    # Optional folder of reference voice clips for -Voice chatterbox (files named
+    # starting "male"/"female"). Defaults to .tools\chatterbox\voices if present.
+    [string]$VoiceDir = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -97,6 +102,19 @@ if ($engine -eq "none") {
         if (-not $piperReady) { throw "Piper not found under .tools\piper. Run with -Voice sapi, or install Piper." }
         $env:PIPER_BIN = $piperExe
         $env:PIPER_VOICE_DIR = $piperVoices
+    }
+    if ($engine -eq "chatterbox") {
+        # Reference voice clips: explicit -VoiceDir, else the default convention.
+        if (-not $VoiceDir) {
+            $defaultVoiceDir = Join-Path $repositoryRoot ".tools\chatterbox\voices"
+            if (Test-Path -LiteralPath $defaultVoiceDir) { $VoiceDir = $defaultVoiceDir }
+        }
+        if ($VoiceDir) {
+            $env:CHATTERBOX_VOICE_DIR = $VoiceDir
+            Write-Host "  Voice clips      : $VoiceDir" -ForegroundColor Green
+        } else {
+            Write-Host "  Voice clips      : (none - using Chatterbox's built-in voice)" -ForegroundColor Yellow
+        }
     }
     Write-Host "  Villager voices  : $engine" -ForegroundColor Green
 }
