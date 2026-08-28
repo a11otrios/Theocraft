@@ -45,11 +45,21 @@ if (-not $ollama) {
     throw "Ollama not found. Install it (winget install --id Ollama.Ollama) and re-run."
 }
 
-# Ensure the Ollama service answers before doing anything else.
-try {
-    Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/version" -TimeoutSec 5 | Out-Null
-} catch {
-    throw "Ollama service is not responding on 127.0.0.1:11434. Start Ollama and re-run."
+# Ensure the Ollama service answers before doing anything else. Retry for a
+# while so autostart-at-logon works even if Ollama is still coming up.
+$ollamaReady = $false
+foreach ($attempt in 1..20) {
+    try {
+        Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/version" -TimeoutSec 5 | Out-Null
+        $ollamaReady = $true
+        break
+    } catch {
+        if ($attempt -eq 1) { Write-Host "Waiting for Ollama to start..." -ForegroundColor Yellow }
+        Start-Sleep -Seconds 3
+    }
+}
+if (-not $ollamaReady) {
+    throw "Ollama service is not responding on 127.0.0.1:11434 after 60s. Start Ollama and re-run."
 }
 
 # Pull the model if it is not already available locally.

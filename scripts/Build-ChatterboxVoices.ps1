@@ -35,17 +35,17 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 # so the gateway matches each villager to a clip of its gender. Add rows here as
 # you download more Piper voices for more accents.
 $VoiceRegistry = @(
-    @{ Stem = "en_US-ryan-medium";        Out = "male_us_ryan" }
-    @{ Stem = "en_US-amy-medium";         Out = "female_us_amy" }
-    @{ Stem = "en_GB-alan-medium";        Out = "male_gb_alan" }
-    @{ Stem = "en_GB-jenny_dioco-medium"; Out = "female_gb_jenny" }
-    # --- more accents: download these .onnx models to enable them ---
-    @{ Stem = "en_GB-alba-medium";              Out = "female_gb_scottish_alba" }
+    @{ Stem = "en_US-ryan-medium";                  Out = "male_us_ryan" }
+    @{ Stem = "en_US-amy-medium";                   Out = "female_us_amy" }
+    @{ Stem = "en_GB-alan-medium";                  Out = "male_gb_alan" }
+    @{ Stem = "en_GB-jenny_dioco-medium";           Out = "female_gb_jenny" }
+    @{ Stem = "en_GB-alba-medium";                  Out = "female_gb_scottish_alba" }
     @{ Stem = "en_GB-northern_english_male-medium"; Out = "male_gb_northern" }
-    @{ Stem = "en_US-lessac-medium";            Out = "male_us_lessac" }
-    @{ Stem = "en_US-hfc_female-medium";        Out = "female_us_hfc" }
-    @{ Stem = "en_US-joe-medium";               Out = "male_us_joe" }
-    @{ Stem = "en_US-kristin-medium";           Out = "female_us_kristin" }
+    @{ Stem = "en_US-lessac-medium";                Out = "female_us_lessac" }
+    @{ Stem = "en_US-hfc_female-medium";            Out = "female_us_hfc" }
+    @{ Stem = "en_US-joe-medium";                   Out = "male_us_joe" }
+    @{ Stem = "en_US-kristin-medium";               Out = "female_us_kristin" }
+    # --- add more Piper .onnx models here for more accents/voices ---
 )
 
 $made = 0
@@ -56,7 +56,18 @@ foreach ($v in $VoiceRegistry) {
         continue
     }
     $outWav = Join-Path $outDir ($v.Out + ".wav")
-    $Text | & $piper --model $model --output_file $outWav 2>$null
+    # Piper logs to stderr; in PowerShell 5.1 that trips NativeCommandError under
+    # ErrorActionPreference=Stop, so run this one call with errors non-fatal and
+    # check the real exit code instead.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $Text | & $piper --model $model --output_file $outWav 2>&1 | Out-Null
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = $prevEap
+    if ($code -ne 0 -or -not (Test-Path -LiteralPath $outWav)) {
+        Write-Warning "  piper failed for $($v.Stem) (exit $code)"
+        continue
+    }
     Write-Host "  $($v.Out).wav  <- $($v.Stem)" -ForegroundColor Green
     $made++
 }
