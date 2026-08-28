@@ -104,6 +104,12 @@ if ($engine -eq "none") {
         $env:PIPER_VOICE_DIR = $piperVoices
     }
     if ($engine -eq "chatterbox") {
+        # Chatterbox lives in its own venv (isolated from the project's dev tools,
+        # which need conflicting numpy/antlr versions). Require it.
+        $ttsPython = Join-Path $repositoryRoot ".tools\tts-venv\Scripts\python.exe"
+        if (-not (Test-Path -LiteralPath $ttsPython)) {
+            throw "Chatterbox venv not found at .tools\tts-venv. Create it: python -m venv .tools\tts-venv; .\.tools\tts-venv\Scripts\python -m pip install chatterbox-tts soundfile"
+        }
         # Reference voice clips: explicit -VoiceDir, else the default convention.
         if (-not $VoiceDir) {
             $defaultVoiceDir = Join-Path $repositoryRoot ".tools\chatterbox\voices"
@@ -119,8 +125,13 @@ if ($engine -eq "none") {
     Write-Host "  Villager voices  : $engine" -ForegroundColor Green
 }
 
-$python = (Get-Command python -ErrorAction SilentlyContinue).Source
-if (-not $python) { $python = (Get-Command py -ErrorAction SilentlyContinue).Source }
+# Chatterbox must run under its dedicated venv; everything else uses system Python.
+if ($engine -eq "chatterbox") {
+    $python = Join-Path $repositoryRoot ".tools\tts-venv\Scripts\python.exe"
+} else {
+    $python = (Get-Command python -ErrorAction SilentlyContinue).Source
+    if (-not $python) { $python = (Get-Command py -ErrorAction SilentlyContinue).Source }
+}
 if (-not $python) { throw "Python not found on PATH." }
 
 & $python $serve

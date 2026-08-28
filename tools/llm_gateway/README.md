@@ -137,6 +137,26 @@ its (name-derived) gender, stable by id, and its voice is cloned from that clip.
 With no clips, all villagers share Chatterbox's built-in voice (still nudged a
 little per villager). Point at a different folder with `-VoiceDir <path>`.
 
+**Building a voice pack from Piper.** If Piper is installed (see above),
+`.\scripts\Build-ChatterboxVoices.ps1` turns each Piper voice into an accented
+reference clip automatically (US/GB male/female out of the box). Download more
+Piper voice models (Scottish, Northern English, more speakers) into
+`.tools\piper\voices`, add them to the registry in that script, and re-run it for
+more variety.
+
+**Isolation (important).** Chatterbox pulls in `numpy`/`antlr` versions that
+conflict with this repo's dev tools (`luaparser`). It therefore runs from its own
+virtual environment at `.tools\tts-venv`, which `Run-LlmGateway.ps1 -Voice
+chatterbox` uses automatically. Create it once with:
+
+```powershell
+python -m venv .tools\tts-venv
+.\.tools\tts-venv\Scripts\python -m pip install chatterbox-tts soundfile
+.\.tools\tts-venv\Scripts\python -m pip install --force-reinstall --no-deps `
+  torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu124
+.\.tools\tts-venv\Scripts\python -m pip install "setuptools<81"
+```
+
 Disable voices entirely with `-Voice none`.
 
 ## Troubleshooting
