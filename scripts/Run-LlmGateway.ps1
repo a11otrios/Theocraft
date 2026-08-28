@@ -17,6 +17,9 @@ param(
     [int]$Port = 8713,
     [string]$Token = "",
     [string]$KeepAlive = "30m",
+    # Model context window (tokens Ollama reads at once). 4096 is the old default;
+    # 8192 lets villagers remember roughly twice as much. Safe on an 8 GB GPU.
+    [int]$NumCtx = 8192,
     # Force CPU inference. Use this if Ollama's GPU/CUDA backend crashes
     # (e.g. "llama-server process has terminated ... CUDA error").
     [switch]$CpuOnly,
@@ -28,7 +31,15 @@ param(
     [string]$Voice = "auto",
     # Optional folder of reference voice clips for -Voice chatterbox (files named
     # starting "male"/"female"). Defaults to .tools\chatterbox\voices if present.
-    [string]$VoiceDir = ""
+    [string]$VoiceDir = "",
+    # With -Voice chatterbox, keep villagers born on/before the cutoff on this
+    # older engine ("none" = no split; all villagers get Chatterbox).
+    [ValidateSet("none", "piper", "sapi")]
+    [string]$LegacyVoice = "piper",
+    # Birthday cutoff (DDMMYY) for the split. Empty = freeze it to today's date on
+    # first run (persisted in .tools\chatterbox\voice_cutoff.txt) so the boundary
+    # stays put: existing villagers keep the old voice, later ones get Chatterbox.
+    [string]$VoiceCutoff = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -89,6 +100,7 @@ $env:GATEWAY_PORT = "$Port"
 $env:OLLAMA_MODEL = $Model
 $env:OLLAMA_KEEP_ALIVE = $KeepAlive
 $env:THEOCRAFT_GATEWAY_TOKEN = $Token
+if ($NumCtx -gt 0) { $env:OLLAMA_NUM_CTX = "$NumCtx" }
 if ($CpuOnly) {
     $env:OLLAMA_NUM_GPU = "0"
     Write-Host "  Inference        : CPU only" -ForegroundColor Yellow
@@ -130,6 +142,32 @@ if ($engine -eq "none") {
             Write-Host "  Voice clips      : $VoiceDir" -ForegroundColor Green
         } else {
             Write-Host "  Voice clips      : (none - using Chatterbox's built-in voice)" -ForegroundColor Yellow
+        }
+        # Old-vs-new voice split by villager birthday.
+        if ($LegacyVoice -ne "none") {
+            if (-not $VoiceCutoff) {
+                $cutoffFile = Join-Path $repositoryRoot ".tools\chatterbox\voice_cutoff.txt"
+                if (Test-Path -LiteralPath $cutoffFile) {
+                    $VoiceCutoff = (Get-Content -LiteralPath $cutoffFile -Raw).Trim()
+                } else {
+                    $VoiceCutoff = (Get-Date -Format "ddMMyy")
+                    New-Item -ItemType Directory -Force -Path (Split-Path $cutoffFile) | Out-Null
+                    Set-Content -LiteralPath $cutoffFile -Value $VoiceCutoff -NoNewline -Encoding ascii
+                }
+            }
+            $env:TTS_LEGACY_ENGINE = $LegacyVoice
+            $env:TTS_VOICE_CUTOFF = $VoiceCutoff
+            # The legacy engine needs its own setup available in this same process.
+            if ($LegacyVoice -eq "piper") {
+                if ($piperReady) {
+                    $env:PIPER_BIN = $piperExe
+                    $env:PIPER_VOICE_DIR = $piperVoices
+                } else {
+                    Write-Warning "LegacyVoice piper not installed under .tools\piper; older villagers will get no audio."
+                }
+            }
+            Write-Host "  Old villagers    : $LegacyVoice (born on/before $VoiceCutoff)" -ForegroundColor Green
+            Write-Host "  New villagers    : chatterbox (born after $VoiceCutoff)" -ForegroundColor Green
         }
     }
     Write-Host "  Villager voices  : $engine" -ForegroundColor Green

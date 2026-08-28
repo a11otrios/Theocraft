@@ -157,6 +157,14 @@ python -m venv .tools\tts-venv
 .\.tools\tts-venv\Scripts\python -m pip install "setuptools<81"
 ```
 
+**Keep old villagers on the old voice.** `-Voice chatterbox` can give only *new*
+villagers the neural voice while existing ones keep Piper, split by each villager's
+birthday: `-LegacyVoice piper` (default) with a `-VoiceCutoff` DDMMYY date. Left
+empty, the cutoff is frozen to today on first run (saved in
+`.tools\chatterbox\voice_cutoff.txt`), so villagers alive now keep Piper and only
+ones born later get Chatterbox. Needs the game client to send `born` (see
+`identity.lua`). Turn the split off with `-LegacyVoice none`.
+
 Disable voices entirely with `-Voice none`.
 
 ## Troubleshooting
@@ -220,3 +228,6 @@ All optional, via environment variables (the run script sets the common ones):
 | `CHATTERBOX_VOICE_DIR`     | *(unset)*                | Folder of reference voice clips (gender-named).  |
 | `CHATTERBOX_EXAGGERATION`  | `0.5`                    | Base emotion/intensity, 0..1.                    |
 | `CHATTERBOX_CFG`           | `0.5`                    | Pacing / cfg_weight, 0..1 (lower = slower).      |
+| `TTS_LEGACY_ENGINE`        | *(unset)*                | Old-voice engine for the birthday split (e.g. `piper`). |
+| `TTS_VOICE_CUTOFF`         | *(unset)*                | Birthday (DDMMYY): villagers born on/before it use the legacy engine. |
+| `OLLAMA_NUM_CTX`           | *(model default ~4096)*  | Context window in tokens; higher = longer villager memory. |

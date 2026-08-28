@@ -93,5 +93,8 @@ function mod.identity_snapshot(self)
 		bio = bio,
 		profession = profession_labels[self._profession] or self._profession or "villager",
 		position = pos,
+		-- Birthday (DDMMYY), stamped once at creation. The gateway can use it to
+		-- pick a voice (e.g. keep older villagers on the original TTS engine).
+		born = self._theocraft_born,
 	}
 end

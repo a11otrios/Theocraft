@@ -55,6 +55,9 @@ OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:3b")
 OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
 OLLAMA_NUM_PREDICT = int(os.environ.get("OLLAMA_NUM_PREDICT", "200"))
+# Model context window (tokens Ollama reads at once). Default 4096; raise it (e.g.
+# 8192) to let villagers remember longer conversations. 0/unset = Ollama default.
+OLLAMA_NUM_CTX = int(os.environ.get("OLLAMA_NUM_CTX", "0") or "0")
 OLLAMA_TEMPERATURE = float(os.environ.get("OLLAMA_TEMPERATURE", "0.85"))
 OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT", "60"))
 # Force CPU by setting OLLAMA_NUM_GPU=0 (useful when the GPU/CUDA backend
@@ -137,6 +140,22 @@ def _env_float(name, default):
 
 CHATTERBOX_EXAGGERATION = _env_float("CHATTERBOX_EXAGGERATION", 0.5)
 CHATTERBOX_CFG = _env_float("CHATTERBOX_CFG", 0.5)
+
+# Optional voice split by villager age. When both are set, villagers born on or
+# before TTS_VOICE_CUTOFF (a DDMMYY birthday, matching the game's stamp) use
+# TTS_LEGACY_ENGINE (the "old" voice), and everyone else uses TTS_ENGINE. Lets you
+# keep existing villagers on Piper while new ones get Chatterbox. A villager with
+# no birthday (older game client that doesn't send it) is treated as legacy.
+TTS_LEGACY_ENGINE = os.environ.get("TTS_LEGACY_ENGINE", "").strip().lower()
+TTS_VOICE_CUTOFF = os.environ.get("TTS_VOICE_CUTOFF", "").strip()
+
+
+def _parse_ddmmyy(value):
+    """Parse a DDMMYY string into a comparable (year, month, day) tuple, or None."""
+    value = str(value or "").strip()
+    if len(value) != 6 or not value.isdigit():
+        return None
+    return (2000 + int(value[4:6]), int(value[2:4]), int(value[0:2]))
 
 
 def describe_actions(allowed_actions):
@@ -428,6 +447,8 @@ def call_ollama(payload):
     }
     if OLLAMA_NUM_GPU is not None:
         request_body["options"]["num_gpu"] = OLLAMA_NUM_GPU
+    if OLLAMA_NUM_CTX > 0:
+        request_body["options"]["num_ctx"] = OLLAMA_NUM_CTX
     data = json.dumps(request_body).encode("utf-8")
     req = urllib.request.Request(
         f"{OLLAMA_URL}/api/chat",
@@ -617,41 +638,63 @@ def _chatterbox_ogg(text, villager):
     return buf.getvalue()
 
 
+def _engine_for(villager):
+    """Pick the TTS engine for this villager. With the birthday split enabled,
+    villagers born on/before the cutoff keep the legacy engine (the "old" voice)
+    and everyone else uses the default; a villager with no birthday is treated as
+    legacy. Without the split configured, everyone uses TTS_ENGINE."""
+    if not (TTS_LEGACY_ENGINE and TTS_VOICE_CUTOFF):
+        return TTS_ENGINE
+    cutoff = _parse_ddmmyy(TTS_VOICE_CUTOFF)
+    if cutoff is None:
+        return TTS_ENGINE
+    born = _parse_ddmmyy((villager or {}).get("born"))
+    if born is None or born <= cutoff:
+        return TTS_LEGACY_ENGINE
+    return TTS_ENGINE
+
+
+def _synth_with_engine(engine, text, villager):
+    """Synthesize `text` with a specific engine, returning Ogg bytes or None."""
+    if engine == "chatterbox":
+        return _chatterbox_ogg(text, villager)
+    if engine == "test":
+        if TTS_TEST_OGG and os.path.exists(TTS_TEST_OGG):
+            with open(TTS_TEST_OGG, "rb") as fh:
+                return fh.read()
+        return None
+    if engine == "sapi":
+        return _wav_to_ogg(_sapi_wav(text, villager))
+    if engine == "piper":
+        model = _pick_piper_voice(villager)
+        if not model:
+            return None
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
+            wav_path = tf.name
+        try:
+            _run([PIPER_BIN, "--model", model, "--output_file", wav_path],
+                 text.encode("utf-8"))
+            with open(wav_path, "rb") as fh:
+                wav = fh.read()
+        finally:
+            try:
+                os.remove(wav_path)
+            except OSError:
+                pass
+        return _wav_to_ogg(wav)
+    if engine == "espeak":
+        wav = _run([ESPEAK_BIN, "--stdout", text])
+        return _wav_to_ogg(wav)
+    return None
+
+
 def synth_ogg(text, villager):
     """Synthesize `text` to Ogg Vorbis bytes for the given villager, or None."""
     text = (text or "").strip()
     if not text:
         return None
     try:
-        if TTS_ENGINE == "chatterbox":
-            return _chatterbox_ogg(text, villager)
-        if TTS_ENGINE == "test":
-            if TTS_TEST_OGG and os.path.exists(TTS_TEST_OGG):
-                with open(TTS_TEST_OGG, "rb") as fh:
-                    return fh.read()
-            return None
-        if TTS_ENGINE == "sapi":
-            return _wav_to_ogg(_sapi_wav(text, villager))
-        if TTS_ENGINE == "piper":
-            model = _pick_piper_voice(villager)
-            if not model:
-                return None
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
-                wav_path = tf.name
-            try:
-                _run([PIPER_BIN, "--model", model, "--output_file", wav_path],
-                     text.encode("utf-8"))
-                with open(wav_path, "rb") as fh:
-                    wav = fh.read()
-            finally:
-                try:
-                    os.remove(wav_path)
-                except OSError:
-                    pass
-            return _wav_to_ogg(wav)
-        if TTS_ENGINE == "espeak":
-            wav = _run([ESPEAK_BIN, "--stdout", text])
-            return _wav_to_ogg(wav)
+        return _synth_with_engine(_engine_for(villager), text, villager)
     except Exception as exc:  # noqa: BLE001 - TTS must never break the chat reply
         sys.stderr.write(f"[bridge] tts failed: {exc}\n")
     return None
