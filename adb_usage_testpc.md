@@ -125,8 +125,8 @@ Typical rebuild-and-deploy loop after changing mod code:
 The landmark commands and villager movement work offline. The AI chat/voice
 needs the local gateway reachable from the phone (same Wi-Fi):
 
-- Start it on the PC: `.\scripts\Run-LlmGateway.ps1 -CpuOnly`
-  (CPU because this PC's Ollama GPU backend crashes).
+- Start it on the PC: `.\scripts\Run-LlmGateway.ps1` (GPU works since the driver
+  was updated to 582.66; add `-Voice chatterbox` for neural voices).
 - In the game's settings, set `theocraft_llm_endpoint` to
   `http://<this-PC-LAN-IP>:8713/` (and enable `theocraft_llm_enabled`);
   allow that port through the Windows firewall. `Run-LlmGateway.ps1` prints the
