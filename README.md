@@ -2,6 +2,8 @@
 
 Theocraft is an Android voxel survival game in which persistent villagers can converse through a configurable remote LLM and carry out constrained in-world instructions.
 
+For a consolidated description of the currently implemented game, villager capabilities, AI and voice pipeline, build process, and known boundaries, see [What Theocraft is doing](docs/current-state.md).
+
 Production is based on the native [Luanti](https://github.com/luanti-org/luanti) engine and the [VoxeLibre](https://github.com/VoxeLibre/VoxeLibre) game. The earlier Flutter renderer is preserved on the `prototype/flutter` branch but is not part of the production architecture.
 
 ## Current milestone
