@@ -15,6 +15,12 @@ local function can_edit_limits(player_name)
 	return minetest.check_player_privs(player_name, {server = true})
 end
 
+local function halloween_api()
+	local halloween = rawget(_G, "theocraft_halloween")
+	if halloween and halloween.is_enabled and halloween.is_enabled() then return halloween end
+	return nil
+end
+
 local function session_entity(player_name)
 	local session = mod.sessions[player_name]
 	if not session or not session.object then return nil end
@@ -54,7 +60,9 @@ function mod.show_conversation(player_name, status)
 	mod.ensure_identity(self)
 	local status_text = status or ""
 	local limits_button = can_edit_limits(player_name)
-		and "button[4.15,4.55;1.9,0.6;limits;Limits]" or ""
+		and "button[5.35,4.55;1.4,0.6;limits;Limits]" or ""
+	local treat_button = halloween_api()
+		and "button[3.35,4.55;1.9,0.6;trick_or_treat;Treat]" or ""
 
 	-- History in a scroll container so older turns are reachable, but anchored at
 	-- the TOP showing the newest reply first. This avoids the old scroll-to-bottom
@@ -94,10 +102,11 @@ function mod.show_conversation(player_name, status)
 		"field_enter_after_edit[message;true]",
 		"set_focus[message;true]",
 		"button[5.85,3.6;2.7,0.8;send;Send]",
-		"button[0.25,4.55;1.9,0.6;trade;Trade]",
-		"button[2.2,4.55;1.9,0.6;take;Take]",
+		"button[0.25,4.55;1.5,0.6;trade;Trade]",
+		"button[1.8,4.55;1.5,0.6;take;Take]",
+		treat_button,
 		limits_button,
-		"button_exit[6.45,4.55;1.9,0.6;close;Close]",
+		"button_exit[6.8,4.55;1.75,0.6;close;Close]",
 		status_text ~= "" and ("label[0.25,5.2;" .. minetest.formspec_escape(status_text) .. "]") or "",
 	})
 	minetest.show_formspec(player_name, FORMNAME, formspec)
@@ -155,6 +164,10 @@ local function send_message(player, self, fields)
 	local player_name = player:get_player_name()
 	local message = mod.clean_text(fields.message, mod.resolve_limits(self).message_length)
 	if message == "" then return mod.show_conversation(player_name, "Type a message first.") end
+	local halloween = halloween_api()
+	if halloween and message:lower():find("trick%s*or%s*treat") then
+		return mod.show_conversation(player_name, halloween.trick_or_treat(self, player))
+	end
 	if mod.pending[player_name] then return mod.show_conversation(player_name, "Still waiting for a reply...") end
 	mod.pending[player_name] = true
 	mod.show_conversation(player_name, self._theocraft_name .. " is thinking...")
@@ -193,6 +206,10 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 	elseif fields.take then
 		mod.take_inventory(self, player)
 		mod.show_conversation(player_name, "Collected available items.")
+	elseif fields.trick_or_treat then
+		local halloween = halloween_api()
+		mod.show_conversation(player_name, halloween
+			and halloween.trick_or_treat(self, player) or "Halloween mode is off.")
 	elseif fields.limits then
 		if can_edit_limits(player_name) then
 			mod.show_limits(player_name)

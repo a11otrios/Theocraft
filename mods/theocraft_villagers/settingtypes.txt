@@ -30,6 +30,10 @@ theocraft_llm_timeout_seconds (LLM request timeout) int 15 3 60
 
 [Villager Limits]
 
+# Prevent all villagers from taking damage from players, mobs, projectiles,
+# explosions, falls, fire, lava, and other environmental hazards.
+theocraft_villagers_invincible (Invincible villagers) bool false
+
 # Default limits for every villager. Individual villagers can override these
 # in-game via the Limits button (needs the server privilege). A villager with
 # no override falls back to the value set here.

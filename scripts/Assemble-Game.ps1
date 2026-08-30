@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $voxelibreSource = Join-Path $repositoryRoot "vendor\voxelibre"
-$theocraftMods = @("theocraft_villagers", "theocraft_import")
+$theocraftMods = @("theocraft_villagers", "theocraft_halloween", "theocraft_import")
 $outputPath = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot $OutputDirectory))
 $buildRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot ".build"))
 
@@ -45,6 +45,20 @@ foreach ($modName in $theocraftMods) {
 	$destinationMod = Join-Path $outputPath "mods\$modName"
 	Copy-Item -LiteralPath $modSource -Destination $destinationMod -Recurse -Force
 }
+
+# Luanti's main-menu Advanced Settings parser reads a bundled game's root
+# settingtypes.txt, but does not scan mods that live inside that game. Merge the
+# Theocraft mod settings there so every bundled feature is discoverable.
+$settingSources = @(
+	Join-Path $repositoryRoot "mods\theocraft_villagers\settingtypes.txt"
+	Join-Path $repositoryRoot "mods\theocraft_halloween\settingtypes.txt"
+)
+$settingSections = @($settingSources | ForEach-Object { (Get-Content -LiteralPath $_ -Raw).Trim() })
+$settingText = ($settingSections -join ([Environment]::NewLine + [Environment]::NewLine)) + [Environment]::NewLine
+[System.IO.File]::WriteAllText(
+	(Join-Path $outputPath "settingtypes.txt"),
+	$settingText,
+	(New-Object System.Text.UTF8Encoding($false)))
 
 $gameConf = @"
 title = Theocraft

@@ -8,6 +8,31 @@ end
 mod.original_rightclick = definition.on_rightclick
 local original_on_spawn = definition.on_spawn
 local original_do_custom = definition.do_custom
+local original_on_punch = definition.on_punch
+local original_deal_damage = definition.deal_damage
+local original_damage_mob = definition.damage_mob
+
+-- VoxeLibre has separate paths for punches and environmental damage. Guard all
+-- three entry points so the setting also covers fire, lava, falls, explosions,
+-- projectiles, and damage applied directly by another mod.
+function mod.villagers_invincible()
+	return minetest.settings:get_bool("theocraft_villagers_invincible", false)
+end
+
+definition.on_punch = function(self, ...)
+	if mod.villagers_invincible() then return end
+	if original_on_punch then return original_on_punch(self, ...) end
+end
+
+definition.deal_damage = function(self, ...)
+	if mod.villagers_invincible() then return end
+	if original_deal_damage then return original_deal_damage(self, ...) end
+end
+
+definition.damage_mob = function(self, ...)
+	if mod.villagers_invincible() then return end
+	if original_damage_mob then return original_damage_mob(self, ...) end
+end
 
 definition.on_rightclick = function(self, clicker)
 	if not clicker or not clicker:is_player() then return end

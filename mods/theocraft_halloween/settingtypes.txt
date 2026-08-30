@@ -1,0 +1,8 @@
+[Halloween]
+
+# Enables Halloween treats, the villager Treat button, treat bowls, and extra
+# nighttime bat ambience. This is enabled by default in the themed build.
+theocraft_halloween_enabled (Enable Halloween mode) bool true
+
+# Adds occasional bats near players at night while Halloween mode is enabled.
+theocraft_halloween_bats (Halloween nighttime bats) bool true

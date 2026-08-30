@@ -43,6 +43,10 @@ The server validates every model-selected action against an allowlist before app
 
 Villagers use Luanti pathfinding for directed movement, retry when temporarily stuck, and may make occasional idle journeys back toward their assigned home. Players can take gathered items through the conversation panel.
 
+The advanced game settings include an optional **Invincible villagers** toggle. It is off by default; when enabled, villagers ignore player and mob attacks, projectiles, explosions, falls, fire, lava, and other environmental damage.
+
+The bundled Halloween feature pack is enabled by default. Villagers offer a **Treat** action (or respond to “trick or treat”), candy and caramel apples are edible and craftable, decorative treat bowls provide a daily treat, and extra bats may appear nearby at night. `/halloween on|off|status|kit` controls the event and can provide a starter decoration kit containing jack-o'-lanterns and cobwebs.
+
 Arbitrary commands and arbitrary node placement are not accepted. Unknown actions become `none`; text lengths and gather quantities are clamped; interaction distance, build bounds, inventory availability, and protected areas are checked in the game. These rules apply even when an LLM generated the response.
 
 ## Places, homes, and recovering villagers
