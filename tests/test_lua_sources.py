@@ -153,3 +153,18 @@ def test_circus_pack_is_bundled_and_safe() -> None:
                    "spawn_entity(", "add_entity(", "set_hp(", "punch(",
                    "register_entity("):
         assert banned not in combined_lower, banned
+
+
+def test_circus_textures_all_exist_in_vendor() -> None:
+    import re
+
+    names = set()
+    for source in (ROOT / "mods" / "theocraft_circus").glob("*.lua"):
+        names.update(re.findall(r"([A-Za-z0-9_.-]+\.png)", source.read_text(encoding="utf-8")))
+    assert names, "expected texture references in the circus mod"
+    available = set()
+    for base in ("vendor/voxelibre", "vendor/luanti"):
+        for path in (ROOT / base).rglob("*.png"):
+            available.add(path.name)
+    missing = sorted(names - available)
+    assert not missing, f"missing textures referenced by the circus mod: {missing}"

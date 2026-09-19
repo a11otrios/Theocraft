@@ -241,8 +241,8 @@ minetest.register_node("theocraft_circus:applause_box", {
 minetest.register_node("theocraft_circus:music_box_off", {
 	description = "Circus Music Box (Off)",
 	_doc_items_longdesc = "Right-click to start the cheerful circus background music. Right-click again to stop.",
-	tiles = {"wool_purple.png", "wool_purple.png", "wool_cyan.png",
-		"wool_cyan.png", "wool_purple.png", "wool_purple.png"},
+	tiles = {"wool_violet.png", "wool_violet.png", "wool_cyan.png",
+		"wool_cyan.png", "wool_violet.png", "wool_violet.png"},
 	is_ground_content = false,
 	groups = {handy = 1, deco_block = 1, circus = 1},
 	sounds = sound_wood(),
