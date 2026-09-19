@@ -34,21 +34,16 @@ minetest.register_craftitem("theocraft_circus:ringmaster_cane", {
 	end,
 })
 
--- Juggling helpers: rhythm taps earn applause and medals.
+-- Juggling helpers: rhythm taps earn applause and medals. Timing comes from
+-- the engine monotonic clock via mod.now_us; mod.juggle_tap keeps the pure
+-- rhythm rule (0.25s-2.5s continues the combo, anything else restarts it).
 local function juggle_use(kind, color_tex)
 	return function(itemstack, user, pointed_thing)
 		if not (user and user:is_player()) then return itemstack end
 		local name = user:get_player_name()
-		local now = os.clock()
+		local now = mod.now_us()
 		local state = mod.juggle_progress[name] or {last = 0, combo = 0, best = 0}
-		local gap = now - (state.last or 0)
-		if gap > 0.25 and gap < 2.5 then
-			state.combo = (state.combo or 0) + 1
-		else
-			state.combo = 1
-		end
-		state.last = now
-		if state.combo > (state.best or 0) then state.best = state.combo end
+		mod.juggle_tap(state, now)
 		mod.juggle_progress[name] = state
 		local pos = user:get_pos()
 		if pos then

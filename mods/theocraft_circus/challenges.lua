@@ -48,13 +48,13 @@ function mod.start_show(center)
 		end
 	end
 	minetest.chat_send_all("[Circus] Curtains open (" .. opened .. ")! Spotlights on (" .. lit .. ")! The show begins!")
-	-- Start any nearby circus music boxes so the band joins in.
+	-- Start any nearby circus music boxes through the shared helper so Show
+	-- Mode behaves exactly like a manual toggle (sound on, handle tracked).
 	for _, p in ipairs(minetest.find_nodes_in_area(
 		{x = c.x - 12, y = c.y - 6, z = c.z - 12},
 		{x = c.x + 12, y = c.y + 6, z = c.z + 12},
 		{"theocraft_circus:music_box_off"})) do
-		local n = minetest.get_node(p)
-		minetest.swap_node(p, {name = "theocraft_circus:music_box_on", param2 = n.param2})
+		mod.set_music_box(p, true)
 	end
 	minetest.chat_send_all("[Circus] Theo's Circus Show has begun!")
 	for i = 1, 4 do
@@ -68,14 +68,16 @@ function mod.start_show(center)
 	end)
 end
 
--- Hoop jumps + tightrope steps are tracked forgivingly in a globalstep.
+-- Hoop jumps + tightrope balance are tracked forgivingly in a globalstep.
 local timer = 0
 local last_hoop_reward = {}
-local rope_steps = {}
 
 minetest.register_globalstep(function(dtime)
 	timer = timer + dtime
 	if timer < 0.5 then return end
+	-- Elapsed real seconds since the last pass, so medals measure actual
+	-- balancing time instead of a fixed number of polling ticks.
+	local elapsed = timer
 	timer = 0
 	for _, player in ipairs(minetest.get_connected_players()) do
 		local name = player:get_player_name()
@@ -96,25 +98,28 @@ minetest.register_globalstep(function(dtime)
 					if count == 5 then award_medal(player, "5 hoop jumps") end
 				end
 			end
-			-- Standing on rope/beam/trapezes earns balance cheers.
+			-- Standing on rope/beam/rola bola earns cheers and, after about a
+			-- full minute of continuous balancing, a performer medal.
 			local below = {x = pos.x, y = pos.y - 0.6, z = pos.z}
 			local node = minetest.get_node_or_nil(below)
-			if node and (node.name == "theocraft_circus:tightrope" or
+			local on_apparatus = node and (node.name == "theocraft_circus:tightrope" or
 				node.name == "theocraft_circus:balance_beam" or
-				node.name == "theocraft_circus:rola_bola") then
-				rope_steps[name] = (rope_steps[name] or 0) + 1
-				if rope_steps[name] % 12 == 0 then
-					minetest.chat_send_player(name, "[Circus] Amazing balance! Keep going, star performer!")
-					if mod.is_theo_mode() then mod.sparkle(pos, "balance") end
-				end
-				if rope_steps[name] == 60 then award_medal(player, "a full minute of balancing") end
-			else
+				node.name == "theocraft_circus:rola_bola")
+			local state = mod.balance_state[name] or {ticks = 0, time = 0, awarded = false}
+			mod.balance_state[name] = state
+			local practising_ticks = state.ticks or 0
+			local event = mod.update_balance(state, on_apparatus and true or false, elapsed)
+			if event == "medal" then
+				award_medal(player, "a full minute of balancing")
+			elseif event == "cheer" then
+				minetest.chat_send_player(name, "[Circus] Amazing balance! Keep going, star performer!")
+				if mod.is_theo_mode() then mod.sparkle(pos, "balance") end
+			elseif not on_apparatus then
 				-- Landing on a mat after practice always gets applause, never punishment.
 				local landing = minetest.get_node_or_nil({x = pos.x, y = pos.y - 1.2, z = pos.z})
 				if landing and landing.name:find("theocraft_circus:practice_mat_", 1, true) then
-					if rope_steps[name] and rope_steps[name] > 4 then
+					if practising_ticks > 4 then
 						minetest.chat_send_player(name, "[Circus] Soft landing! What a safe, bouncy finish!")
-						rope_steps[name] = 0
 					end
 				end
 			end

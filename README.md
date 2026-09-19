@@ -45,6 +45,18 @@ git submodule update --init --depth 1
 .\scripts\Verify-AndroidApk.ps1
 ```
 
+Rebuilding after editing mods or scripts needs no manual cleanup:
+`Prepare-Android` re-assembles the game when Theocraft sources changed and
+re-syncs every current mod into the Android staging tree before Gradle runs,
+so a normal build never silently packages stale game files. For a from-scratch
+rebuild of the generated trees (both strictly confined to `.build`), use:
+
+```powershell
+.\scripts\Assemble-Game.ps1 -Refresh
+.\scripts\Prepare-Android.ps1 -Refresh
+.\scripts\Build-Android.ps1 -Configuration Debug -Clean
+```
+
 To install the debug build on a connected Android phone, enable Developer
 options and USB debugging, unlock the phone, approve its USB debugging prompt,
 and run:

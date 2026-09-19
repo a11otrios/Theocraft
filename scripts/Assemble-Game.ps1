@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-	[string]$OutputDirectory = ".build\game"
+	[string]$OutputDirectory = ".build\game",
+	[switch]$Refresh
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,11 +11,31 @@ $theocraftMods = @("theocraft_villagers", "theocraft_halloween", "theocraft_circ
 $outputPath = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot $OutputDirectory))
 $buildRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot ".build"))
 
+function Remove-GeneratedDirectory {
+	param([string]$TargetPath, [string]$BuildRoot)
+	$resolved = [System.IO.Path]::GetFullPath($TargetPath)
+	$prefix = $BuildRoot + [System.IO.Path]::DirectorySeparatorChar
+	if (-not $resolved.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+		throw "Refusing to remove ${resolved}: it is outside the generated $BuildRoot directory."
+	}
+	if ($resolved.TrimEnd([System.IO.Path]::DirectorySeparatorChar) -eq $BuildRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar)) {
+		throw "Refusing to remove the build root itself ($BuildRoot)."
+	}
+	if (Test-Path -LiteralPath $resolved) {
+		Remove-Item -LiteralPath $resolved -Recurse -Force
+	}
+}
+
 if (-not $outputPath.StartsWith($buildRoot + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
 	throw "OutputDirectory must resolve inside $buildRoot"
 }
 if (Test-Path -LiteralPath $outputPath) {
-	throw "Generated game already exists at $outputPath. Remove that exact .build directory before rebuilding."
+	if ($Refresh) {
+		Write-Output "Removing stale generated game at $outputPath"
+		Remove-GeneratedDirectory $outputPath $buildRoot
+	} else {
+		throw "Generated game already exists at $outputPath. Remove that exact .build directory before rebuilding, or re-run with -Refresh."
+	}
 }
 if (-not (Test-Path -LiteralPath (Join-Path $voxelibreSource "game.conf"))) {
 	throw "VoxeLibre submodule is missing. Run git submodule update --init --depth 1."
@@ -49,12 +70,28 @@ foreach ($modName in $theocraftMods) {
 # Luanti's main-menu Advanced Settings parser reads a bundled game's root
 # settingtypes.txt, but does not scan mods that live inside that game. Merge the
 # Theocraft mod settings there so every bundled feature is discoverable.
+# The upstream VoxeLibre catalogue must come first and stay intact: without it
+# the game would lose all of its own documented settings.
+$voxelibreSettings = Join-Path $voxelibreSource "settingtypes.txt"
+if (-not (Test-Path -LiteralPath $voxelibreSettings -PathType Leaf)) {
+	throw "VoxeLibre settingtypes.txt is missing at $voxelibreSettings. Run git submodule update --init --depth 1."
+}
 $settingSources = @(
 	Join-Path $repositoryRoot "mods\theocraft_villagers\settingtypes.txt"
 	Join-Path $repositoryRoot "mods\theocraft_halloween\settingtypes.txt"
 	Join-Path $repositoryRoot "mods\theocraft_circus\settingtypes.txt"
 )
-$settingSections = @($settingSources | ForEach-Object { (Get-Content -LiteralPath $_ -Raw).Trim() })
+$baseText = (Get-Content -LiteralPath $voxelibreSettings -Raw).Trim()
+$settingSections = @($baseText)
+foreach ($source in $settingSources) {
+	$section = (Get-Content -LiteralPath $source -Raw).Trim()
+	$header = ($section -split "`r?`n")[0]
+	if ($baseText.Contains($header) -or ($settingSections -join "`n").Contains($header)) {
+		Write-Warning "Skipping duplicate settings section from $source ($header)"
+		continue
+	}
+	$settingSections += $section
+}
 $settingText = ($settingSections -join ([Environment]::NewLine + [Environment]::NewLine)) + [Environment]::NewLine
 [System.IO.File]::WriteAllText(
 	(Join-Path $outputPath "settingtypes.txt"),

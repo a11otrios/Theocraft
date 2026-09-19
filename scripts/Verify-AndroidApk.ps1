@@ -47,6 +47,7 @@ try {
 		foreach ($required in @(
 			"games/theocraft/game.conf",
 			"games/theocraft/mods/theocraft_villagers/init.lua",
+			"games/theocraft/mods/theocraft_halloween/init.lua",
 			"games/theocraft/mods/theocraft_circus/init.lua",
 			"games/theocraft/mods/theocraft_import/init.lua"
 		)) {

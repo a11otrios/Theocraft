@@ -249,13 +249,14 @@ minetest.register_node("theocraft_circus:music_box_off", {
 	_mcl_blast_resistance = 1,
 	_mcl_hardness = 0.8,
 	on_rightclick = function(pos, node, clicker)
-		minetest.swap_node(pos, {name = "theocraft_circus:music_box_on", param2 = node.param2})
-		local handle = mod.safe_sound("mcl_note_block_pling", {pos = pos, gain = 0.5})
-		if handle then mod.music_handles[minetest.pos_to_string(pos)] = handle end
+		mod.set_music_box(pos, true)
 		if clicker and clicker:is_player() then
 			minetest.chat_send_player(clicker:get_player_name(), "[Circus] The circus band begins to play! Oom-pah-pah!")
 		end
 		return clicker and clicker:get_wielded_item() or nil
+	end,
+	on_destruct = function(pos)
+		mod.stop_music_at(pos)
 	end,
 })
 
@@ -274,14 +275,11 @@ minetest.register_node("theocraft_circus:music_box_on", {
 	_mcl_blast_resistance = 1,
 	_mcl_hardness = 0.8,
 	on_rightclick = function(pos, node, clicker)
-		minetest.swap_node(pos, {name = "theocraft_circus:music_box_off", param2 = node.param2})
-		local key = minetest.pos_to_string(pos)
-		local handle = mod.music_handles[key]
-		if handle then
-			pcall(minetest.sound_stop, handle)
-			mod.music_handles[key] = nil
-		end
+		mod.set_music_box(pos, false)
 		return clicker and clicker:get_wielded_item() or nil
+	end,
+	on_destruct = function(pos)
+		mod.stop_music_at(pos)
 	end,
 })
 

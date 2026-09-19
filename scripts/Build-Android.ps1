@@ -3,7 +3,8 @@ param(
 	[ValidateSet("Debug", "Release")]
 	[string]$Configuration = "Debug",
 	[string]$JavaHome = ".tools\android\jdk\jdk-17.0.20+8",
-	[string]$AndroidSdk = ".tools\android\sdk"
+	[string]$AndroidSdk = ".tools\android\sdk",
+	[switch]$Clean
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,7 +18,13 @@ if (-not (Test-Path -LiteralPath (Join-Path $javaHomePath "bin\java.exe") -PathT
 if (-not (Test-Path -LiteralPath (Join-Path $androidSdkPath "platforms\android-35") -PathType Container)) {
 	throw "Android SDK platform 35 was not found at $androidSdkPath. Run scripts\Setup-AndroidToolchain.ps1 first or pass -AndroidSdk."
 }
-if (-not (Test-Path -LiteralPath $androidRoot)) {
+# Always go through Prepare: with existing staging it re-assembles the game
+# when mod sources changed and re-syncs every current Theocraft mod into the
+# staging tree, so Gradle can never silently package stale game files.
+# -Clean wipes the generated staging first for a from-scratch rebuild.
+if ($Clean) {
+	& (Join-Path $PSScriptRoot "Prepare-Android.ps1") -Refresh
+} else {
 	& (Join-Path $PSScriptRoot "Prepare-Android.ps1")
 }
 
