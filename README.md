@@ -9,10 +9,24 @@ Production is based on the native [Luanti](https://github.com/luanti-org/luanti)
 ## Current milestone
 
 - Native voxel engine and mature survival gameplay pinned as Git submodules.
-- Persistent villager names, short bios, and per-player conversation histories that survive world restarts.
+- Persistent villager identity (UUID, name, short bio, profession, birthday) and
+  per-player conversation histories that survive world restarts.
 - Mobile conversation formspec with local history and trade hand-off.
 - Configurable HTTPS LLM-gateway contract with a deterministic offline fallback.
-- Server-validated `follow`, `stay`, `come`, `gather`, and `build` actions.
+- Bundled local gateway that runs villagers on Ollama (default `qwen2.5:3b`)
+  entirely on the player's PC, reachable from an Android device over the LAN.
+- Server-validated actions: `follow`, `stay`, `come`, `gather`, `build`,
+  `buildhome`, `goto`, `guard`, `patrol`, `deliver`, and `teleport`.
+- Spoken villager replies via optional text-to-speech (Windows SAPI, Piper
+  neural voices, or Chatterbox), with a stable voice per villager.
+- Persistent named landmarks plus villager homes, location tracking, and
+  `/tcrevive` / `/tcexport` / `/tcimport` for recovering and transferring villagers.
+- Cheerful Circus Pack: big-top tents, safe trapeze/tightrope/trampoline props,
+  costumes, popcorn, confetti, show mode, mini-challenges, and Theo's Circus Mode
+  with soft landings and encouragement (`/circus kit`, `/tcshow`).
+- One-command circus arena builder: `/build circus_arena [small|medium|large|rainbow|theos_show]`
+  raises a full Big Top tent with ring, seats, stage, lights, props, stands, signs,
+  and a show-start bell.
 - Generated Android staging that bundles and brands the game without changing upstream checkouts.
 - Desktop conversion of legacy and modern Minecraft Java Anvil worlds, including
   Minecraft 1.18+ negative build heights and explicit unknown-block reporting.

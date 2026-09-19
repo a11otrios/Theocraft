@@ -104,6 +104,8 @@ Nether and End dimensions, entities, block entities and their inventories, signs
 | Area | Location |
 | --- | --- |
 | Villager identity, UI, memory, policy, actions, speech, landmarks, recovery, and transfer | `mods/theocraft_villagers` |
+| Cheerful circus tents, safe props, costumes, treats, show mode, and Theo's Circus Mode | `mods/theocraft_circus` |
+| One-command circus arena builder (`/build circus_arena`, five variants) | `mods/theocraft_circus/arena.lua` |
 | Placeholder for unsupported imported blocks | `mods/theocraft_import` |
 | Local Ollama and text-to-speech gateway | `tools/llm_gateway` |
 | Minecraft Java world converter | `tools/world_import` |

@@ -1,0 +1,20 @@
+[Circus Pack]
+
+# Master switch for Theo's Circus Mode: fall protection near circus builds,
+# encouraging messages, confetti rewards, and gentle trick helpers.
+theocraft_circus_theo_mode (Theo's Circus Mode) bool true
+
+# When Theo's Circus Mode is on, cancel fall damage while the player is
+# inside a circus area (near ring floors, stages, mats, trampolines,
+# tightropes, or the circus tent blocks).
+theocraft_circus_fall_protect (Soft landings in circus areas) bool true
+
+# How far (in nodes) a player can be from circus blocks and still count
+# as "inside the circus" for fall protection and encouragement.
+theocraft_circus_area_radius (Circus area radius) int 14 4 48
+
+# Celebrate successful tricks with confetti particles and applause messages.
+theocraft_circus_confetti (Confetti celebrations) bool true
+
+# Popcorn restores a small amount of hunger when eaten.
+theocraft_circus_popcorn_food (Popcorn restores hunger) int 2 1 6

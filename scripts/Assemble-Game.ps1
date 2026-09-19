@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $voxelibreSource = Join-Path $repositoryRoot "vendor\voxelibre"
-$theocraftMods = @("theocraft_villagers", "theocraft_halloween", "theocraft_import")
+$theocraftMods = @("theocraft_villagers", "theocraft_halloween", "theocraft_circus", "theocraft_import")
 $outputPath = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot $OutputDirectory))
 $buildRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot ".build"))
 
@@ -52,6 +52,7 @@ foreach ($modName in $theocraftMods) {
 $settingSources = @(
 	Join-Path $repositoryRoot "mods\theocraft_villagers\settingtypes.txt"
 	Join-Path $repositoryRoot "mods\theocraft_halloween\settingtypes.txt"
+	Join-Path $repositoryRoot "mods\theocraft_circus\settingtypes.txt"
 )
 $settingSections = @($settingSources | ForEach-Object { (Get-Content -LiteralPath $_ -Raw).Trim() })
 $settingText = ($settingSections -join ([Environment]::NewLine + [Environment]::NewLine)) + [Environment]::NewLine
